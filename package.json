@@ -1,0 +1,14 @@
+{
+  "name": "smartcheck",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @smartcheck/api & npm run dev -w @smartcheck/web",
+    "build": "npm run build -w @smartcheck/api && npm run build -w @smartcheck/web",
+    "lint": "npm run lint -w @smartcheck/api && npm run lint -w @smartcheck/web",
+    "format": "npm run format -w @smartcheck/api && npm run format -w @smartcheck/web"
+  }
+}

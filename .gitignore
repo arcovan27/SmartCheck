@@ -1,0 +1,11 @@
+node_modules
+npm-debug.log*
+apps/*/node_modules
+apps/*/dist
+apps/*/.vite
+apps/api/uploads/*
+!apps/api/uploads/.gitkeep
+.env
+apps/api/.env
+tmp-extracted
+extract-docs.js

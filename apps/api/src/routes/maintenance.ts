@@ -1,0 +1,158 @@
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import {
+  MaintenancePlanTriggerType,
+  MaintenancePriority,
+  MaintenanceStatus,
+  MaintenanceType
+} from "@prisma/client";
+import { prisma } from "../prisma.js";
+import { evaluatePlan } from "../services/maintenanceAlerts.js";
+
+export async function maintenanceRoutes(app: FastifyInstance) {
+  app.get("/maintenances", { preHandler: [app.authenticate] }, async (request) => {
+    const query = z.object({
+      equipmentId: z.string().cuid().optional(),
+      status: z.nativeEnum(MaintenanceStatus).optional()
+    }).parse(request.query);
+
+    return prisma.maintenance.findMany({
+      where: {
+        equipmentId: query.equipmentId,
+        status: query.status
+      },
+      include: {
+        equipment: true,
+        responsible: true,
+        attachments: true,
+        checklistExecution: true
+      },
+      orderBy: [{ status: "asc" }, { openedAt: "desc" }]
+    });
+  });
+
+  app.post("/maintenances", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const body = z.object({
+      equipmentId: z.string().cuid(),
+      type: z.nativeEnum(MaintenanceType),
+      description: z.string().min(3),
+      status: z.nativeEnum(MaintenanceStatus).optional(),
+      priority: z.nativeEnum(MaintenancePriority).optional(),
+      responsibleId: z.string().cuid().optional().nullable(),
+      history: z.string().optional().nullable(),
+      attachmentIds: z.array(z.string().cuid()).optional()
+    }).parse(request.body);
+
+    const maintenance = await prisma.maintenance.create({
+      data: {
+        equipmentId: body.equipmentId,
+        type: body.type,
+        description: body.description,
+        status: body.status,
+        priority: body.priority,
+        responsibleId: body.responsibleId,
+        history: body.history,
+        attachments: body.attachmentIds
+          ? {
+              connect: body.attachmentIds.map((id) => ({ id }))
+            }
+          : undefined
+      },
+      include: { attachments: true }
+    });
+
+    return reply.code(201).send(maintenance);
+  });
+
+  app.patch("/maintenances/:id", { preHandler: [app.authenticate] }, async (request) => {
+    const params = z.object({ id: z.string().cuid() }).parse(request.params);
+    const body = z.object({
+      description: z.string().min(3).optional(),
+      status: z.nativeEnum(MaintenanceStatus).optional(),
+      priority: z.nativeEnum(MaintenancePriority).optional(),
+      responsibleId: z.string().cuid().optional().nullable(),
+      history: z.string().optional().nullable(),
+      startedAt: z.coerce.date().optional().nullable(),
+      finishedAt: z.coerce.date().optional().nullable()
+    }).parse(request.body);
+
+    return prisma.maintenance.update({
+      where: { id: params.id },
+      data: body
+    });
+  });
+
+  app.get("/maintenance-plans", { preHandler: [app.authenticate] }, async (request) => {
+    const query = z.object({ equipmentId: z.string().cuid().optional() }).parse(request.query);
+
+    return prisma.maintenancePlan.findMany({
+      where: {
+        equipmentId: query.equipmentId
+      },
+      include: { equipment: true },
+      orderBy: { createdAt: "desc" }
+    });
+  });
+
+  app.post("/maintenance-plans", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const body = z.object({
+      equipmentId: z.string().cuid(),
+      title: z.string().min(2),
+      description: z.string().optional().nullable(),
+      triggerType: z.nativeEnum(MaintenancePlanTriggerType),
+      threshold: z.number().positive(),
+      nearThreshold: z.number().positive().optional().nullable(),
+      lastExecutionDate: z.coerce.date().optional().nullable(),
+      lastExecutionValue: z.number().optional().nullable(),
+      active: z.boolean().optional()
+    }).parse(request.body);
+
+    const plan = await prisma.maintenancePlan.create({ data: body });
+    return reply.code(201).send(plan);
+  });
+
+  app.get("/maintenance-alerts", { preHandler: [app.authenticate] }, async () => {
+    const plans = await prisma.maintenancePlan.findMany({
+      where: { active: true },
+      include: { equipment: true }
+    });
+
+    return plans.map((plan) => ({
+      equipment: {
+        id: plan.equipment.id,
+        name: plan.equipment.name,
+        mileage: plan.equipment.mileage,
+        hourmeter: plan.equipment.hourmeter
+      },
+      plan: {
+        id: plan.id,
+        title: plan.title,
+        triggerType: plan.triggerType
+      },
+      alert: evaluatePlan(plan, plan.equipment)
+    }));
+  });
+
+  app.get("/history/equipment/:equipmentId", { preHandler: [app.authenticate] }, async (request) => {
+    const params = z.object({ equipmentId: z.string().cuid() }).parse(request.params);
+
+    const [checklists, maintenances, plans] = await Promise.all([
+      prisma.checklistExecution.findMany({
+        where: { equipmentId: params.equipmentId },
+        include: { template: true, operator: true },
+        orderBy: { executedAt: "desc" }
+      }),
+      prisma.maintenance.findMany({
+        where: { equipmentId: params.equipmentId },
+        include: { responsible: true },
+        orderBy: { openedAt: "desc" }
+      }),
+      prisma.maintenancePlan.findMany({
+        where: { equipmentId: params.equipmentId },
+        orderBy: { createdAt: "desc" }
+      })
+    ]);
+
+    return { checklists, maintenances, plans };
+  });
+}
