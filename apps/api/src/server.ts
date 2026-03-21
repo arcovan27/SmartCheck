@@ -19,7 +19,11 @@ const app = Fastify({ logger: true });
 
 await app.register(cors, {
   origin: env.WEB_ORIGIN.split(",").map((value) => value.trim()),
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 });
 
 await app.register(multipart, {
