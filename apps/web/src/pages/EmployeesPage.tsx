@@ -11,8 +11,6 @@ type Employee = {
   position: string;
   phone?: string | null;
   email?: string | null;
-  admissionDate?: string | null;
-  dismissalDate?: string | null;
   isActive: boolean;
   notes?: string | null;
   user?: { id: string; email: string } | null;
@@ -32,8 +30,6 @@ const emptyForm = {
   position: "",
   phone: "",
   email: "",
-  admissionDate: "",
-  dismissalDate: "",
   notes: "",
   isActive: true
 };
@@ -94,7 +90,27 @@ export function EmployeesPage() {
         method: "PATCH",
         body: JSON.stringify({ isActive: payload.isActive })
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employees"] })
+    onSuccess: async (_, payload) => {
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+      if (selectedId === payload.id) {
+        setForm((prev) => ({ ...prev, isActive: payload.isActive }));
+        await queryClient.invalidateQueries({ queryKey: ["employee-details", payload.id] });
+      }
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (employeeId: string) =>
+      apiRequest<{ message: string }>(`/employees/${employeeId}`, {
+        method: "DELETE"
+      }),
+    onSuccess: async (_, employeeId) => {
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+      if (selectedId === employeeId) {
+        setSelectedId(null);
+        setForm(emptyForm);
+      }
+    }
   });
 
   const startBiometric = useMutation({
@@ -144,8 +160,6 @@ export function EmployeesPage() {
       position: employee.position,
       phone: employee.phone ?? "",
       email: employee.email ?? "",
-      admissionDate: employee.admissionDate ? employee.admissionDate.slice(0, 10) : "",
-      dismissalDate: employee.dismissalDate ? employee.dismissalDate.slice(0, 10) : "",
       notes: employee.notes ?? "",
       isActive: employee.isActive
     });
@@ -163,8 +177,6 @@ export function EmployeesPage() {
       cpf: form.cpf || null,
       phone: form.phone || null,
       email: form.email || null,
-      admissionDate: form.admissionDate || null,
-      dismissalDate: form.dismissalDate || null,
       notes: form.notes || null
     });
   }
@@ -220,15 +232,29 @@ export function EmployeesPage() {
                 </span>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button className="btn-secondary" onClick={() => loadEmployee(employee)}>
+                <button type="button" className="btn-secondary" onClick={() => loadEmployee(employee)}>
                   Abrir ficha
                 </button>
                 <button
+                  type="button"
                   className={employee.isActive ? "btn-danger" : "btn-primary"}
                   onClick={() => statusMutation.mutate({ id: employee.id, isActive: !employee.isActive })}
                 >
                   {employee.isActive ? "Inativar" : "Ativar"}
                 </button>
+                {!employee.isActive && (
+                  <button
+                    type="button"
+                    className="btn-danger"
+                    onClick={() => {
+                      if (window.confirm(`Excluir o funcionário ${employee.name}?`)) {
+                        deleteMutation.mutate(employee.id);
+                      }
+                    }}
+                  >
+                    Excluir
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -296,22 +322,6 @@ export function EmployeesPage() {
               placeholder="E-mail"
               value={form.email}
               onChange={(event) => setForm({ ...form, email: event.target.value })}
-            />
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <input
-              className="input"
-              type="date"
-              placeholder="Admissão"
-              value={form.admissionDate}
-              onChange={(event) => setForm({ ...form, admissionDate: event.target.value })}
-            />
-            <input
-              className="input"
-              type="date"
-              placeholder="Demissão"
-              value={form.dismissalDate}
-              onChange={(event) => setForm({ ...form, dismissalDate: event.target.value })}
             />
           </div>
           <textarea

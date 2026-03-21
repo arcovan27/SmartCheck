@@ -180,4 +180,45 @@ export async function employeeRoutes(app: FastifyInstance) {
       data: { isActive: body.isActive }
     });
   });
+
+  app.delete("/employees/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const params = z.object({ id: z.string().cuid() }).parse(request.params);
+
+    const employee = await prisma.employee.findUnique({
+      where: { id: params.id },
+      include: {
+        user: true,
+        biometric: true,
+        epiMovements: { select: { id: true }, take: 1 },
+        checklistExecutions: { select: { id: true }, take: 1 },
+        maintenances: { select: { id: true }, take: 1 }
+      }
+    });
+
+    if (!employee) {
+      return reply.code(404).send({ message: "Funcionário não encontrado" });
+    }
+
+    if (employee.isActive) {
+      return reply.code(400).send({ message: "Inative o funcionário antes de excluir" });
+    }
+
+    if (employee.user) {
+      return reply.code(400).send({ message: "Este funcionário possui usuário vinculado e não pode ser excluído" });
+    }
+
+    if (employee.epiMovements.length || employee.checklistExecutions.length || employee.maintenances.length) {
+      return reply
+        .code(400)
+        .send({ message: "Este funcionário possui histórico operacional e não pode ser excluído" });
+    }
+
+    if (employee.biometric) {
+      await prisma.employeeBiometric.delete({ where: { employeeId: employee.id } });
+    }
+
+    await prisma.employee.delete({ where: { id: employee.id } });
+
+    return { message: "Funcionário excluído com sucesso" };
+  });
 }
