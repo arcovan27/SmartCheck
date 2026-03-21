@@ -39,14 +39,6 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[28px] bg-slate-950 px-6 py-7 text-white shadow-[0_30px_60px_rgba(15,23,42,0.25)]">
-        <p className="text-sm uppercase tracking-[0.2em] text-cyan-300">Dashboard</p>
-        <h2 className="mt-2 text-3xl font-extrabold">Painel inicial da operação</h2>
-        <p className="mt-2 max-w-2xl text-sm text-slate-300">
-          Essa é a estrutura base do SmartCheck. Por enquanto o sistema começa com o administrador e os módulos principais de cadastro e acompanhamento operacional.
-        </p>
-      </section>
-
       <section className="space-y-3">
         <div>
           <h3 className="section-title">Cards</h3>
