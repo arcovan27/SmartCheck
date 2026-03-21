@@ -6,11 +6,12 @@ export function getApiUrl(path: string): string {
 
 export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem("smartcheck.token");
+  const hasJsonBody = options?.body !== undefined && !(options.body instanceof FormData);
 
   const response = await fetch(getApiUrl(path), {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options?.headers ?? {})
     }
