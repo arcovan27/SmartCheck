@@ -1,335 +1,512 @@
-import { PrismaClient, ChecklistResponseType, UserRole, MaintenancePlanTriggerType } from "@prisma/client";
+Ôªøimport {
+  BiometricProvider,
+  BiometricStatus,
+  ChecklistItemType,
+  ChecklistOptionResult,
+  ChecklistPeriodicity,
+  ConfirmationMethod,
+  EpiMovementType,
+  EquipmentType,
+  MaintenancePriority,
+  MaintenanceStatus,
+  MaintenanceType,
+  PrismaClient,
+  UserRole
+} from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-type TemplateSeed = {
-  equipmentName: string;
+async function upsertEmployee(data: {
   name: string;
-  periodicity: "DIARIO" | "SEMANAL" | "MENSAL";
-  items: string[];
-};
+  registration: string;
+  cpf?: string;
+  department: string;
+  position: string;
+  phone?: string;
+  email?: string;
+  notes?: string;
+}) {
+  return prisma.employee.upsert({
+    where: { registration: data.registration },
+    create: {
+      ...data,
+      isActive: true
+    },
+    update: {
+      ...data,
+      isActive: true
+    }
+  });
+}
 
-const checklistTemplates: TemplateSeed[] = [
-  {
-    equipmentName: "Empilhadeira GLP",
-    name: "Checklist Di·rio de Empilhadeira",
-    periodicity: "SEMANAL",
-    items: [
-      "NÌvel ·gua/Ûleo",
-      "Pintura geral",
-      "Rodas dianteiras/traseiras",
-      "Material preso nas rodas",
-      "Correntes da torre",
-      "Cinto de seguranÁa",
-      "Mangueira de Ûleo hidr·ulico",
-      "Extintor de incÍndio",
-      "Pedais/Joystick/Comandos",
-      "Buzina e farol",
-      "Freio e volante",
-      "Retrovisores",
-      "Giroflex",
-      "Alarme de marcha rÈ",
-      "CÛdigo de erro no painel",
-      "NÌvel de combustÌvel",
-      "Botij„o GLP",
-      "Luz de freio",
-      "Luzes de advertÍncia no painel",
-      "DireÁ„o",
-      "Torre",
-      "Pedal de aproximaÁ„o",
-      "ProteÁıes de seguranÁa",
-      "EPIs do operador",
-      "Engraxe geral"
-    ]
-  },
-  {
-    equipmentName: "Misturador Massa de Tubos",
-    name: "Checklist Di·rio Misturador - Massa Tubos",
-    periodicity: "DIARIO",
-    items: [
-      "As comportas est„o funcionando corretamente?",
-      "Motor elÈtrico do misturador est· funcionando corretamente?",
-      "Botıes do painel elÈtrico est„o funcionando corretamente?",
-      "Sensor da porta do misturador est· funcionando corretamente?",
-      "Botıes de emergÍncia est„o funcionando corretamente?",
-      "Filtro de cimento em perfeito estado de conservaÁ„o?",
-      "Trava de seguranÁa da porta em perfeito estado?",
-      "Ferramentas de limpeza em perfeito estado?",
-      "Sistema hidr·ulico da comporta est· funcionando corretamente?",
-      "”leo hidr·ulico est· nivelado?",
-      "Mangueiras do sistema hidr·ulico em perfeito estado?",
-      "Mangueiras do ar comprimido em perfeito estado?",
-      "Sistema de comando est· correspondendo corretamente?",
-      "P·s do sistema giratÛrio est„o conservadas?",
-      "Sistema hidr·ulico da ·gua em perfeito estado?",
-      "Lumin·ria em LED est· funcionando corretamente?",
-      "Piso, corrim„o e escadas em perfeito estado?",
-      "Esteiras funcionando e em perfeito estado?"
-    ]
-  },
-  {
-    equipmentName: "Prensa Tubos Manual 01",
-    name: "Checklist Di·rio Prensa Tubos Manual (01)",
-    periodicity: "DIARIO",
-    items: [
-      "Trilhos do carrinho em perfeito estado?",
-      "M·quina est· sendo lubrificada e engraxada periodicamente?",
-      "Botıes do painel de comando funcionando corretamente?",
-      "Bot„o de emergÍncia funcionando corretamente?",
-      "Mesa da forma em bom estado?",
-      "Corrente do eixo central em perfeito estado?",
-      "Motor elÈtrico central funcionando corretamente?",
-      "Motor e vibrador do carrinho funcionando corretamente?",
-      "Cabos de aÁo em perfeito estado?",
-      "Correia da polia em perfeito estado?",
-      "Freio do volante engraxado e funcionando corretamente?"
-    ]
-  },
-  {
-    equipmentName: "Prensa Tubos Manual 02",
-    name: "Checklist Di·rio Prensa Tubos Manual (02)",
-    periodicity: "DIARIO",
-    items: [
-      "Trilhos do carrinho em perfeito estado?",
-      "M·quina est· sendo lubrificada e engraxada periodicamente?",
-      "Botıes do painel de comando funcionando corretamente?",
-      "Bot„o de emergÍncia funcionando corretamente?",
-      "Mesa da forma em bom estado?",
-      "Corrente do eixo central em perfeito estado?",
-      "Motor elÈtrico central funcionando corretamente?",
-      "Motor e vibrador do carrinho funcionando corretamente?",
-      "Cabos de aÁo em perfeito estado?",
-      "Correia da polia em perfeito estado?",
-      "Freio do volante engraxado e funcionando corretamente?"
-    ]
-  },
-  {
-    equipmentName: "P· Carregadeira",
-    name: "Checklist P· Carregadeira",
-    periodicity: "DIARIO",
-    items: [
-      "NÌvel de ·gua do motor est· correto?",
-      "Buzina est· funcionando corretamente?",
-      "Sistema de partida est· funcionando?",
-      "Luzes de freio e pisca alerta est„o funcionando?",
-      "Luzes traseira e dianteira est„o funcionando?",
-      "Cilindros de elevaÁ„o e inclinaÁ„o funcionando corretamente?",
-      "Alarme de rÈ est· funcionando?",
-      "ManÙmetro de temperatura e Ûleo do motor funcionando?",
-      "AmperÌmetro est· funcionando?",
-      "Retrovisores em perfeito estado?",
-      "Motor sem vazamento e funcionando corretamente?",
-      "Pneus dianteiros e traseiros em perfeito estado?",
-      "Extintor est· no prazo de validade?",
-      "Mangueiras em perfeito estado de conservaÁ„o?"
-    ]
-  },
-  {
-    equipmentName: "Caminh„o Munck",
-    name: "Checklist Caminh„o Munck",
-    periodicity: "DIARIO",
-    items: [
-      "Verificar vazamentos nas conexıes",
-      "Verificar condiÁıes das mangueiras",
-      "Verificar aperto dos parafusos de fixaÁ„o das sapatas",
-      "Verificar vazamento na saÌda da bomba hidr·ulica",
-      "Abrir lanÁa / verificar empeno / verificar folga",
-      "CondiÁıes do moit„o e trava de seguranÁa do guincho",
-      "CondiÁıes dos manetes de comando e patolas",
-      "Tabela de iÁamento legÌvel e de f·cil acesso",
-      "Guindaste com revisıes periÛdicas em dia",
-      "Indicador de carga na lanÁa",
-      "Treinamento dos operadores em dia",
-      "Cabos de aÁo / anilhas / cintas em perfeito estado",
-      "Freios/pneus/lanternas/retrovisores em perfeito estado",
-      "EPIs: colete refletor, capacete e cone",
-      "NÌvel de Ûleo hidr·ulico / nÌvel de ·gua / alarme de rÈ",
-      "Carroceria/placa/faixas refletivas em bom estado",
-      "Lavagem da cabine e parte externa em dia",
-      "Engraxe preventivo das partes externas em dia",
-      "Validade aferiÁ„o do tacÛgrafo",
-      "Validade licenÁa das marginais",
-      "Validade licenÁa ANTT"
-    ]
-  }
-];
+async function upsertUser(data: {
+  email: string;
+  password: string;
+  role: UserRole;
+  employeeId?: string;
+}) {
+  const passwordHash = await bcrypt.hash(data.password, 10);
+
+  return prisma.user.upsert({
+    where: { email: data.email },
+    create: {
+      email: data.email,
+      passwordHash,
+      role: data.role,
+      employeeId: data.employeeId,
+      isActive: true
+    },
+    update: {
+      passwordHash,
+      role: data.role,
+      employeeId: data.employeeId,
+      isActive: true
+    }
+  });
+}
 
 async function main() {
-  const adminPassword = await bcrypt.hash("admin123", 10);
-
-  const adminEmployee = await prisma.employee.upsert({
-    where: { registration: "0001" },
-    create: {
-      name: "Administrador SmartCheck",
-      registration: "0001",
-      department: "AdministraÁ„o",
-      function: "Administrador",
-      active: true
-    },
-    update: {}
+  const admin = await upsertEmployee({
+    name: "Administrador SmartCheck",
+    registration: "0001",
+    department: "Administra√ß√£o",
+    position: "Administrador do Sistema",
+    phone: "(11) 90000-0001",
+    email: "admin@smartcheck.local"
   });
 
-  await prisma.user.upsert({
-    where: { email: "admin@smartcheck.local" },
-    create: {
-      email: "admin@smartcheck.local",
-      passwordHash: adminPassword,
-      role: UserRole.ADMIN,
-      employeeId: adminEmployee.id
+  const manutencao = await upsertEmployee({
+    name: "Carla Menezes",
+    registration: "1101",
+    cpf: "12345678901",
+    department: "Manuten√ß√£o",
+    position: "T√©cnica de Manuten√ß√£o",
+    phone: "(11) 90000-1101",
+    email: "carla.menezes@smartcheck.local"
+  });
+
+  const operador = await upsertEmployee({
+    name: "Thiago Fitipaldi Maia",
+    registration: "1020",
+    cpf: "98765432100",
+    department: "Opera√ß√£o",
+    position: "Operador de Empilhadeira",
+    phone: "(11) 90000-1020",
+    email: "thiago.maia@smartcheck.local"
+  });
+
+  const seguranca = await upsertEmployee({
+    name: "Juliana Prado",
+    registration: "2104",
+    cpf: "56789012345",
+    department: "Seguran√ßa do Trabalho",
+    position: "T√©cnica de Seguran√ßa",
+    phone: "(11) 90000-2104",
+    email: "juliana.prado@smartcheck.local"
+  });
+
+  const almoxarife = await upsertEmployee({
+    name: "Ronaldo Almeida",
+    registration: "3008",
+    cpf: "74185296300",
+    department: "Almoxarifado",
+    position: "Almoxarife",
+    phone: "(11) 90000-3008",
+    email: "ronaldo.almeida@smartcheck.local"
+  });
+
+  const adminUser = await upsertUser({
+    email: "admin@smartcheck.local",
+    password: "admin123",
+    role: UserRole.ADMIN,
+    employeeId: admin.id
+  });
+
+  const manutencaoUser = await upsertUser({
+    email: "manutencao@smartcheck.local",
+    password: "smart123",
+    role: UserRole.MANUTENCAO,
+    employeeId: manutencao.id
+  });
+
+  const operadorUser = await upsertUser({
+    email: "operador@smartcheck.local",
+    password: "smart123",
+    role: UserRole.OPERADOR,
+    employeeId: operador.id
+  });
+
+  const segurancaUser = await upsertUser({
+    email: "sst@smartcheck.local",
+    password: "smart123",
+    role: UserRole.SEGURANCA_DO_TRABALHO,
+    employeeId: seguranca.id
+  });
+
+  const almoxarifadoUser = await upsertUser({
+    email: "almoxarifado@smartcheck.local",
+    password: "smart123",
+    role: UserRole.ALMOXARIFADO,
+    employeeId: almoxarife.id
+  });
+
+  const equipments = [
+    {
+      name: "Empilhadeira GLP",
+      type: EquipmentType.VEICULO,
+      department: "Log√≠stica",
+      model: "Hyster 80",
+      serialNumber: "EMP-001",
+      mileage: 12240,
+      hourmeter: 451,
+      manufacturer: "Hyster",
+      assetTag: "PAT-001",
+      notes: "Uso di√°rio em carga e descarga"
     },
-    update: {
-      passwordHash: adminPassword,
-      role: UserRole.ADMIN,
-      employeeId: adminEmployee.id
+    {
+      name: "Misturador Massa de Tubos",
+      type: EquipmentType.MAQUINA,
+      department: "Produ√ß√£o",
+      model: "MT-500",
+      serialNumber: "MIST-001",
+      hourmeter: 980,
+      manufacturer: "InovaMix",
+      assetTag: "PAT-010",
+      notes: "Linha principal de mistura"
+    },
+    {
+      name: "Prensa Tubos Manual 01",
+      type: EquipmentType.MAQUINA,
+      department: "Produ√ß√£o",
+      model: "PTM-01",
+      serialNumber: "PRS-001",
+      hourmeter: 2100,
+      manufacturer: "Prensatec",
+      assetTag: "PAT-015"
+    },
+    {
+      name: "Caminh√£o Munck",
+      type: EquipmentType.VEICULO,
+      department: "Expedi√ß√£o",
+      model: "Munck 12T",
+      serialNumber: "MUN-001",
+      mileage: 85200,
+      hourmeter: 3200,
+      manufacturer: "Volkswagen",
+      assetTag: "PAT-100"
     }
-  });
-
-  const operator = await prisma.employee.upsert({
-    where: { registration: "1020" },
-    create: {
-      name: "Thiago Fitipaldi Maia",
-      registration: "1020",
-      department: "OperaÁ„o",
-      function: "Operador",
-      active: true
-    },
-    update: {}
-  });
-
-  const equipmentSeeds = [
-    { name: "Empilhadeira GLP", type: "VEICULO", department: "LogÌstica", model: "Hyster", serialNumber: "EMP-001", mileage: 12000, hourmeter: 450 },
-    { name: "Misturador Massa de Tubos", type: "MAQUINA", department: "ProduÁ„o", model: "MT-500", serialNumber: "MIST-001", hourmeter: 980 },
-    { name: "Prensa Tubos Manual 01", type: "MAQUINA", department: "ProduÁ„o", model: "PTM-01", serialNumber: "PRS-001", hourmeter: 2100 },
-    { name: "Prensa Tubos Manual 02", type: "MAQUINA", department: "ProduÁ„o", model: "PTM-02", serialNumber: "PRS-002", hourmeter: 1880 },
-    { name: "P· Carregadeira", type: "VEICULO", department: "P·tio", model: "PC-90", serialNumber: "PA-001", hourmeter: 1450 },
-    { name: "Caminh„o Munck", type: "VEICULO", department: "ExpediÁ„o", model: "Munck 12T", serialNumber: "MUN-001", mileage: 85000, hourmeter: 3200 }
   ];
 
-  for (const equipmentSeed of equipmentSeeds) {
+  for (const equipmentData of equipments) {
     await prisma.equipment.upsert({
-      where: { serialNumber: equipmentSeed.serialNumber },
-      create: equipmentSeed,
-      update: equipmentSeed
+      where: { serialNumber: equipmentData.serialNumber },
+      create: equipmentData,
+      update: equipmentData
     });
   }
 
-  const epis = [
-    "Capacete",
-    "”culos de proteÁ„o",
-    "Luva de raspa",
-    "Bota com biqueira",
-    "Protetor auricular",
-    "M·scara respiratÛria",
-    "Colete refletivo"
+  const epiSeeds = [
+    {
+      name: "Capacete Classe B",
+      description: "Capacete com jugular para √°rea operacional",
+      ca: "12345",
+      category: "Prote√ß√£o da cabe√ßa",
+      unit: "UN",
+      stock: 120,
+      minimumStock: 30
+    },
+    {
+      name: "√ìculos de Prote√ß√£o Incolor",
+      description: "Lente incolor antiemba√ßante",
+      ca: "22334",
+      category: "Prote√ß√£o ocular",
+      unit: "UN",
+      stock: 200,
+      minimumStock: 50
+    },
+    {
+      name: "Luva de Raspa",
+      description: "Luva para manuseio de pe√ßas e cabos",
+      ca: "33445",
+      category: "Prote√ß√£o das m√£os",
+      unit: "PAR",
+      stock: 160,
+      minimumStock: 40
+    },
+    {
+      name: "Bota com Biqueira",
+      description: "Bota de seguran√ßa com biqueira de composite",
+      ca: "44556",
+      category: "Prote√ß√£o dos p√©s",
+      unit: "PAR",
+      stock: 90,
+      minimumStock: 20
+    }
   ];
 
-  for (const epiName of epis) {
+  for (const epiSeed of epiSeeds) {
     await prisma.epi.upsert({
-      where: { name: epiName },
-      create: { name: epiName },
-      update: {}
-    });
-  }
-
-  for (const templateSeed of checklistTemplates) {
-    const equipment = await prisma.equipment.findFirstOrThrow({
-      where: { name: templateSeed.equipmentName }
-    });
-
-    const existing = await prisma.checklistTemplate.findFirst({
       where: {
-        name: templateSeed.name,
-        equipmentId: equipment.id
-      }
-    });
-
-    if (existing) {
-      await prisma.checklistTemplateItem.deleteMany({ where: { templateId: existing.id } });
-      await prisma.checklistTemplate.update({
-        where: { id: existing.id },
-        data: {
-          periodicity: templateSeed.periodicity,
-          items: {
-            create: templateSeed.items.map((label, index) => ({
-              label,
-              position: index,
-              responseType: ChecklistResponseType.OK_PROBLEM_NA,
-              required: true,
-              createsMaintenanceOnProblem: true
-            }))
-          }
+        name_ca: {
+          name: epiSeed.name,
+          ca: epiSeed.ca
         }
-      });
-      continue;
-    }
-
-    await prisma.checklistTemplate.create({
-      data: {
-        name: templateSeed.name,
-        periodicity: templateSeed.periodicity,
-        equipmentId: equipment.id,
-        items: {
-          create: templateSeed.items.map((label, index) => ({
-            label,
-            position: index,
-            responseType: ChecklistResponseType.OK_PROBLEM_NA,
-            required: true,
-            createsMaintenanceOnProblem: true
-          }))
-        }
+      },
+      create: {
+        ...epiSeed,
+        isActive: true
+      },
+      update: {
+        ...epiSeed,
+        isActive: true
       }
     });
   }
 
-  const munck = await prisma.equipment.findFirstOrThrow({ where: { name: "Caminh„o Munck" } });
-  const empilhadeira = await prisma.equipment.findFirstOrThrow({ where: { name: "Empilhadeira GLP" } });
+  const empilhadeira = await prisma.equipment.findFirstOrThrow({ where: { serialNumber: "EMP-001" } });
+  const caminh√£oMunck = await prisma.equipment.findFirstOrThrow({ where: { serialNumber: "MUN-001" } });
 
-  await prisma.maintenancePlan.upsert({
-    where: { id: "cmf0000000000000000000001" },
+  const templateEmpilhadeira = await prisma.checklistTemplate.upsert({
+    where: {
+      id: "cmseed-checklist-empilhadeira"
+    },
     create: {
-      id: "cmf0000000000000000000001",
-      equipmentId: munck.id,
-      title: "Preventiva por KM - Munck",
-      description: "Troca de filtros e revis„o geral",
-      triggerType: MaintenancePlanTriggerType.KM,
-      threshold: 10000,
-      nearThreshold: 9000,
-      lastExecutionValue: 76000
+      id: "cmseed-checklist-empilhadeira",
+      name: "Checklist Di√°rio da Empilhadeira",
+      description: "Checklist operacional pr√©-turno",
+      periodicity: ChecklistPeriodicity.DIARIO,
+      equipmentId: empilhadeira.id,
+      isActive: true
     },
     update: {
-      equipmentId: munck.id,
-      triggerType: MaintenancePlanTriggerType.KM,
-      threshold: 10000,
-      nearThreshold: 9000,
-      lastExecutionValue: 76000
+      name: "Checklist Di√°rio da Empilhadeira",
+      description: "Checklist operacional pr√©-turno",
+      periodicity: ChecklistPeriodicity.DIARIO,
+      equipmentId: empilhadeira.id,
+      isActive: true
     }
   });
 
-  await prisma.maintenancePlan.upsert({
-    where: { id: "cmf0000000000000000000002" },
-    create: {
-      id: "cmf0000000000000000000002",
+  await prisma.checklistTemplateItem.deleteMany({ where: { templateId: templateEmpilhadeira.id } });
+  await prisma.checklistTemplateItem.createMany({
+    data: [
+      {
+        templateId: templateEmpilhadeira.id,
+        label: "Freio e dire√ß√£o em funcionamento",
+        instruction: "Testar com a m√°quina parada antes da sa√≠da",
+        itemType: ChecklistItemType.OK_PROBLEMA_NA,
+        position: 0,
+        required: true,
+        requiresObservationOnProblem: true,
+        allowsPhotoOnProblem: true,
+        opensMaintenanceOnProblem: true
+      },
+      {
+        templateId: templateEmpilhadeira.id,
+        label: "Buzina e alarme de r√©",
+        instruction: "Verificar funcionamento completo",
+        itemType: ChecklistItemType.SIM_NAO,
+        position: 1,
+        required: true,
+        requiresObservationOnProblem: true,
+        allowsPhotoOnProblem: true,
+        opensMaintenanceOnProblem: true
+      },
+      {
+        templateId: templateEmpilhadeira.id,
+        label: "Hor√≠metro inicial",
+        instruction: "Informar valor antes do in√≠cio do turno",
+        itemType: ChecklistItemType.NUMERO,
+        position: 2,
+        required: true,
+        requiresObservationOnProblem: false,
+        allowsPhotoOnProblem: false,
+        opensMaintenanceOnProblem: false
+      },
+      {
+        templateId: templateEmpilhadeira.id,
+        label: "Observa√ß√µes gerais",
+        instruction: "Anotar qualquer desvio percebido",
+        itemType: ChecklistItemType.TEXTO,
+        position: 3,
+        required: false,
+        requiresObservationOnProblem: false,
+        allowsPhotoOnProblem: false,
+        opensMaintenanceOnProblem: false
+      }
+    ]
+  });
+
+  const exec = await prisma.checklistExecution.create({
+    data: {
+      templateId: templateEmpilhadeira.id,
       equipmentId: empilhadeira.id,
-      title: "Preventiva por dias - Empilhadeira",
-      description: "Revis„o de seguranÁa",
-      triggerType: MaintenancePlanTriggerType.DAYS,
-      threshold: 30,
-      nearThreshold: 25,
-      lastExecutionDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 22)
-    },
-    update: {
-      equipmentId: empilhadeira.id,
-      triggerType: MaintenancePlanTriggerType.DAYS,
-      threshold: 30,
-      nearThreshold: 25,
-      lastExecutionDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 22)
+      employeeId: operador.id,
+      notes: "Execu√ß√£o de demonstra√ß√£o",
+      hadProblem: true
     }
   });
 
-  console.log("Seed concluÌdo.");
+  const checklistItems = await prisma.checklistTemplateItem.findMany({
+    where: { templateId: templateEmpilhadeira.id },
+    orderBy: { position: "asc" }
+  });
+
+  await prisma.checklistExecutionItem.createMany({
+    data: [
+      {
+        executionId: exec.id,
+        templateItemId: checklistItems[0].id,
+        optionResult: ChecklistOptionResult.OK,
+        hadProblem: false
+      },
+      {
+        executionId: exec.id,
+        templateItemId: checklistItems[1].id,
+        booleanResult: false,
+        observation: "Alarme de r√© intermitente",
+        hadProblem: true
+      },
+      {
+        executionId: exec.id,
+        templateItemId: checklistItems[2].id,
+        numericValue: 451,
+        hadProblem: false
+      },
+      {
+        executionId: exec.id,
+        templateItemId: checklistItems[3].id,
+        textValue: "Necess√°rio ajuste no alarme durante a parada da tarde",
+        hadProblem: false
+      }
+    ]
+  });
+
+  await prisma.maintenance.createMany({
+    data: [
+      {
+        equipmentId: empilhadeira.id,
+        checklistExecutionId: exec.id,
+        type: MaintenanceType.CORRETIVA,
+        priority: MaintenancePriority.ALTA,
+        status: MaintenanceStatus.ABERTA,
+        description: "Falha no alarme de r√© da empilhadeira",
+        cause: "Intermit√™ncia no chicote",
+        responsibleId: manutencao.id,
+        notes: "Aberta automaticamente via checklist"
+      },
+      {
+        equipmentId: caminh√£oMunck.id,
+        type: MaintenanceType.PREVENTIVA,
+        priority: MaintenancePriority.MEDIA,
+        status: MaintenanceStatus.EM_ANDAMENTO,
+        description: "Troca de filtros e revis√£o geral do caminh√£o Munck",
+        responsibleId: manutencao.id,
+        notes: "Execu√ß√£o programada"
+      }
+    ]
+  });
+
+  await prisma.maintenancePlan.createMany({
+    data: [
+      {
+        equipmentId: caminh√£oMunck.id,
+        title: "Preventiva por KM - Caminh√£o Munck",
+        description: "Revis√£o de transmiss√£o a cada 10.000 km",
+        triggerType: "KM",
+        threshold: 10000,
+        nearThreshold: 9000,
+        lastExecutionValue: 76000,
+        isActive: true
+      },
+      {
+        equipmentId: empilhadeira.id,
+        title: "Preventiva por dias - Empilhadeira",
+        description: "Revis√£o de seguran√ßa mensal",
+        triggerType: "DAYS",
+        threshold: 30,
+        nearThreshold: 25,
+        lastExecutionDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 22),
+        isActive: true
+      }
+    ]
+  });
+
+  const capacete = await prisma.epi.findFirstOrThrow({ where: { name: "Capacete Classe B" } });
+  const oculos = await prisma.epi.findFirstOrThrow({ where: { name: "√ìculos de Prote√ß√£o Incolor" } });
+
+  await prisma.epiDelivery.createMany({
+    data: [
+      {
+        employeeId: operador.id,
+        epiId: capacete.id,
+        movementType: EpiMovementType.ENTREGA,
+        quantity: 1,
+        date: new Date(),
+        responsibleUserId: almoxarifadoUser.id,
+        notes: "Entrega inicial",
+        confirmationMethod: ConfirmationMethod.BIOMETRIA,
+        confirmationBiometricId: "BIO-OP-1020"
+      },
+      {
+        employeeId: operador.id,
+        epiId: oculos.id,
+        movementType: EpiMovementType.ENTREGA,
+        quantity: 1,
+        date: new Date(),
+        responsibleUserId: almoxarifadoUser.id,
+        notes: "Entrega inicial",
+        confirmationMethod: ConfirmationMethod.LOGIN
+      }
+    ]
+  });
+
+  await prisma.employeeBiometric.upsert({
+    where: { employeeId: operador.id },
+    create: {
+      employeeId: operador.id,
+      biometricExternalId: "BIO-OP-1020",
+      provider: BiometricProvider.MOCK,
+      status: BiometricStatus.CADASTRADA
+    },
+    update: {
+      biometricExternalId: "BIO-OP-1020",
+      provider: BiometricProvider.MOCK,
+      status: BiometricStatus.CADASTRADA
+    }
+  });
+
+  await prisma.employeeBiometric.upsert({
+    where: { employeeId: manutencao.id },
+    create: {
+      employeeId: manutencao.id,
+      provider: BiometricProvider.UAREU_4500,
+      status: BiometricStatus.PENDENTE
+    },
+    update: {
+      provider: BiometricProvider.UAREU_4500,
+      status: BiometricStatus.PENDENTE
+    }
+  });
+
+  const employeesToLink = [admin, manutencao, operador, seguranca, almoxarife];
+  const usersToLink = [adminUser, manutencaoUser, operadorUser, segurancaUser, almoxarifadoUser];
+
+  for (let index = 0; index < employeesToLink.length; index += 1) {
+    await prisma.employee.update({
+      where: { id: employeesToLink[index].id },
+      data: { user: { connect: { id: usersToLink[index].id } } }
+    });
+  }
+
+  console.log("Seed conclu√≠da com sucesso.");
   console.log("Login admin: admin@smartcheck.local / admin123");
-  console.log(`Operador exemplo: ${operator.name}`);
+  console.log("Usu√°rios de teste:");
+  console.log("- manutencao@smartcheck.local / smart123 (MANUTENCAO)");
+  console.log("- operador@smartcheck.local / smart123 (OPERADOR)");
+  console.log("- sst@smartcheck.local / smart123 (SEGURANCA_DO_TRABALHO)");
+  console.log("- almoxarifado@smartcheck.local / smart123 (ALMOXARIFADO)");
 }
 
 main()

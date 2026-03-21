@@ -1,5 +1,10 @@
-import dayjs from "dayjs";
-import { MaintenancePlanAlertState, MaintenancePlanTriggerType, type MaintenancePlan, type Equipment } from "@prisma/client";
+﻿import dayjs from "dayjs";
+import {
+  MaintenancePlanAlertState,
+  MaintenancePlanTriggerType,
+  type Equipment,
+  type MaintenancePlan
+} from "@prisma/client";
 
 export type MaintenancePlanAlert = {
   planId: string;
@@ -12,8 +17,8 @@ export type MaintenancePlanAlert = {
 };
 
 function calculateByDays(plan: MaintenancePlan): { state: MaintenancePlanAlertState; currentValue: number } {
-  const start = plan.lastExecutionDate ? dayjs(plan.lastExecutionDate) : dayjs(plan.createdAt);
-  const currentValue = dayjs().diff(start, "day");
+  const startDate = plan.lastExecutionDate ?? plan.createdAt;
+  const currentValue = dayjs().diff(dayjs(startDate), "day");
 
   if (currentValue >= plan.threshold) {
     return { state: MaintenancePlanAlertState.DUE, currentValue };
@@ -27,9 +32,12 @@ function calculateByDays(plan: MaintenancePlan): { state: MaintenancePlanAlertSt
   return { state: MaintenancePlanAlertState.OK, currentValue };
 }
 
-function calculateByCounter(plan: MaintenancePlan, equipmentValue: number | null): { state: MaintenancePlanAlertState; currentValue: number } {
-  const base = plan.lastExecutionValue ?? 0;
-  const currentValue = Math.max((equipmentValue ?? 0) - base, 0);
+function calculateByCounter(
+  plan: MaintenancePlan,
+  currentEquipmentValue: number | null
+): { state: MaintenancePlanAlertState; currentValue: number } {
+  const baseValue = plan.lastExecutionValue ?? 0;
+  const currentValue = Math.max((currentEquipmentValue ?? 0) - baseValue, 0);
 
   if (currentValue >= plan.threshold) {
     return { state: MaintenancePlanAlertState.DUE, currentValue };
@@ -44,15 +52,19 @@ function calculateByCounter(plan: MaintenancePlan, equipmentValue: number | null
 }
 
 export function evaluatePlan(plan: MaintenancePlan, equipment: Equipment): MaintenancePlanAlert {
-  const nearThreshold = plan.nearThreshold ?? (plan.triggerType === MaintenancePlanTriggerType.DAYS ? Math.max(plan.threshold - 5, 0) : Math.max(plan.threshold * 0.9, 0));
-  const byDays = plan.triggerType === MaintenancePlanTriggerType.DAYS;
+  const nearThreshold =
+    plan.nearThreshold ??
+    (plan.triggerType === MaintenancePlanTriggerType.DAYS
+      ? Math.max(plan.threshold - 5, 0)
+      : Math.max(plan.threshold * 0.9, 0));
 
-  const calc = byDays
-    ? calculateByDays(plan)
-    : calculateByCounter(
-        plan,
-        plan.triggerType === MaintenancePlanTriggerType.KM ? equipment.mileage : equipment.hourmeter
-      );
+  const calc =
+    plan.triggerType === MaintenancePlanTriggerType.DAYS
+      ? calculateByDays(plan)
+      : calculateByCounter(
+          plan,
+          plan.triggerType === MaintenancePlanTriggerType.KM ? equipment.mileage : equipment.hourmeter
+        );
 
   return {
     planId: plan.id,

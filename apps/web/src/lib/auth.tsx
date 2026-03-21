@@ -1,14 +1,22 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+﻿import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { apiRequest } from "./api";
 
-type AuthUser = {
+export type UserRole =
+  | "ADMIN"
+  | "MANUTENCAO"
+  | "OPERADOR"
+  | "SEGURANCA_DO_TRABALHO"
+  | "ALMOXARIFADO";
+
+export type AuthUser = {
   id: string;
   email: string;
-  role: "ADMIN" | "MAINTENANCE" | "OPERATOR" | "SAFETY";
-  employee: {
+  role: UserRole;
+  isActive: boolean;
+  employee?: {
     id: string;
     name: string;
-  };
+  } | null;
 };
 
 type AuthContextType = {

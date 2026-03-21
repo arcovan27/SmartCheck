@@ -1,25 +1,29 @@
-import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+﻿import type { FastifyInstance } from "fastify";
 import {
   MaintenancePlanTriggerType,
   MaintenancePriority,
   MaintenanceStatus,
   MaintenanceType
 } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { evaluatePlan } from "../services/maintenanceAlerts.js";
 
 export async function maintenanceRoutes(app: FastifyInstance) {
   app.get("/maintenances", { preHandler: [app.authenticate] }, async (request) => {
-    const query = z.object({
-      equipmentId: z.string().cuid().optional(),
-      status: z.nativeEnum(MaintenanceStatus).optional()
-    }).parse(request.query);
+    const query = z
+      .object({
+        equipmentId: z.string().cuid().optional(),
+        status: z.nativeEnum(MaintenanceStatus).optional(),
+        type: z.nativeEnum(MaintenanceType).optional()
+      })
+      .parse(request.query);
 
     return prisma.maintenance.findMany({
       where: {
         equipmentId: query.equipmentId,
-        status: query.status
+        status: query.status,
+        type: query.type
       },
       include: {
         equipment: true,
@@ -32,33 +36,43 @@ export async function maintenanceRoutes(app: FastifyInstance) {
   });
 
   app.post("/maintenances", { preHandler: [app.authenticate] }, async (request, reply) => {
-    const body = z.object({
-      equipmentId: z.string().cuid(),
-      type: z.nativeEnum(MaintenanceType),
-      description: z.string().min(3),
-      status: z.nativeEnum(MaintenanceStatus).optional(),
-      priority: z.nativeEnum(MaintenancePriority).optional(),
-      responsibleId: z.string().cuid().optional().nullable(),
-      history: z.string().optional().nullable(),
-      attachmentIds: z.array(z.string().cuid()).optional()
-    }).parse(request.body);
+    const body = z
+      .object({
+        equipmentId: z.string().cuid(),
+        checklistExecutionId: z.string().cuid().optional().nullable(),
+        type: z.nativeEnum(MaintenanceType),
+        description: z.string().min(3),
+        status: z.nativeEnum(MaintenanceStatus).optional(),
+        priority: z.nativeEnum(MaintenancePriority).optional(),
+        cause: z.string().optional().nullable(),
+        responsibleId: z.string().cuid().optional().nullable(),
+        openedAt: z.coerce.date().optional(),
+        concludedAt: z.coerce.date().optional().nullable(),
+        notes: z.string().optional().nullable(),
+        attachmentIds: z.array(z.string().cuid()).optional()
+      })
+      .parse(request.body);
 
     const maintenance = await prisma.maintenance.create({
       data: {
         equipmentId: body.equipmentId,
+        checklistExecutionId: body.checklistExecutionId,
         type: body.type,
         description: body.description,
-        status: body.status,
-        priority: body.priority,
+        status: body.status ?? MaintenanceStatus.ABERTA,
+        priority: body.priority ?? MaintenancePriority.MEDIA,
+        cause: body.cause,
         responsibleId: body.responsibleId,
-        history: body.history,
-        attachments: body.attachmentIds
-          ? {
-              connect: body.attachmentIds.map((id) => ({ id }))
-            }
-          : undefined
+        openedAt: body.openedAt ?? new Date(),
+        concludedAt: body.concludedAt,
+        notes: body.notes,
+        attachments: body.attachmentIds ? { connect: body.attachmentIds.map((id) => ({ id })) } : undefined
       },
-      include: { attachments: true }
+      include: {
+        equipment: true,
+        responsible: true,
+        attachments: true
+      }
     });
 
     return reply.code(201).send(maintenance);
@@ -66,19 +80,27 @@ export async function maintenanceRoutes(app: FastifyInstance) {
 
   app.patch("/maintenances/:id", { preHandler: [app.authenticate] }, async (request) => {
     const params = z.object({ id: z.string().cuid() }).parse(request.params);
-    const body = z.object({
-      description: z.string().min(3).optional(),
-      status: z.nativeEnum(MaintenanceStatus).optional(),
-      priority: z.nativeEnum(MaintenancePriority).optional(),
-      responsibleId: z.string().cuid().optional().nullable(),
-      history: z.string().optional().nullable(),
-      startedAt: z.coerce.date().optional().nullable(),
-      finishedAt: z.coerce.date().optional().nullable()
-    }).parse(request.body);
+    const body = z
+      .object({
+        description: z.string().min(3).optional(),
+        status: z.nativeEnum(MaintenanceStatus).optional(),
+        priority: z.nativeEnum(MaintenancePriority).optional(),
+        cause: z.string().optional().nullable(),
+        responsibleId: z.string().cuid().optional().nullable(),
+        openedAt: z.coerce.date().optional(),
+        concludedAt: z.coerce.date().optional().nullable(),
+        notes: z.string().optional().nullable()
+      })
+      .parse(request.body);
 
     return prisma.maintenance.update({
       where: { id: params.id },
-      data: body
+      data: body,
+      include: {
+        equipment: true,
+        responsible: true,
+        attachments: true
+      }
     });
   });
 
@@ -95,25 +117,54 @@ export async function maintenanceRoutes(app: FastifyInstance) {
   });
 
   app.post("/maintenance-plans", { preHandler: [app.authenticate] }, async (request, reply) => {
-    const body = z.object({
-      equipmentId: z.string().cuid(),
-      title: z.string().min(2),
-      description: z.string().optional().nullable(),
-      triggerType: z.nativeEnum(MaintenancePlanTriggerType),
-      threshold: z.number().positive(),
-      nearThreshold: z.number().positive().optional().nullable(),
-      lastExecutionDate: z.coerce.date().optional().nullable(),
-      lastExecutionValue: z.number().optional().nullable(),
-      active: z.boolean().optional()
-    }).parse(request.body);
+    const body = z
+      .object({
+        equipmentId: z.string().cuid(),
+        title: z.string().min(2),
+        description: z.string().optional().nullable(),
+        triggerType: z.nativeEnum(MaintenancePlanTriggerType),
+        threshold: z.number().positive(),
+        nearThreshold: z.number().positive().optional().nullable(),
+        lastExecutionDate: z.coerce.date().optional().nullable(),
+        lastExecutionValue: z.number().optional().nullable(),
+        isActive: z.boolean().optional()
+      })
+      .parse(request.body);
 
-    const plan = await prisma.maintenancePlan.create({ data: body });
+    const plan = await prisma.maintenancePlan.create({
+      data: {
+        ...body,
+        isActive: body.isActive ?? true
+      }
+    });
+
     return reply.code(201).send(plan);
+  });
+
+  app.patch("/maintenance-plans/:id", { preHandler: [app.authenticate] }, async (request) => {
+    const params = z.object({ id: z.string().cuid() }).parse(request.params);
+    const body = z
+      .object({
+        title: z.string().min(2).optional(),
+        description: z.string().optional().nullable(),
+        triggerType: z.nativeEnum(MaintenancePlanTriggerType).optional(),
+        threshold: z.number().positive().optional(),
+        nearThreshold: z.number().positive().optional().nullable(),
+        lastExecutionDate: z.coerce.date().optional().nullable(),
+        lastExecutionValue: z.number().optional().nullable(),
+        isActive: z.boolean().optional()
+      })
+      .parse(request.body);
+
+    return prisma.maintenancePlan.update({
+      where: { id: params.id },
+      data: body
+    });
   });
 
   app.get("/maintenance-alerts", { preHandler: [app.authenticate] }, async () => {
     const plans = await prisma.maintenancePlan.findMany({
-      where: { active: true },
+      where: { isActive: true },
       include: { equipment: true }
     });
 
@@ -139,7 +190,7 @@ export async function maintenanceRoutes(app: FastifyInstance) {
     const [checklists, maintenances, plans] = await Promise.all([
       prisma.checklistExecution.findMany({
         where: { equipmentId: params.equipmentId },
-        include: { template: true, operator: true },
+        include: { template: true, employee: true },
         orderBy: { executedAt: "desc" }
       }),
       prisma.maintenance.findMany({

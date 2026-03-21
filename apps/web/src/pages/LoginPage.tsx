@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+﻿import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
@@ -26,20 +26,28 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-gradient-to-b from-brand-100 to-slate-100 p-4">
-      <form className="card w-full max-w-sm space-y-4" onSubmit={onSubmit}>
-        <div>
-          <h1 className="text-2xl font-bold text-brand-800">SmartCheck</h1>
-          <p className="text-sm text-slate-500">Gest�o operacional industrial</p>
+    <div className="min-h-screen grid place-items-center bg-[radial-gradient(circle_at_top,_#1e293b,_#020617)] p-4">
+      <form className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/70 p-6 shadow-2xl backdrop-blur" onSubmit={onSubmit}>
+        <div className="mb-5">
+          <p className="text-xs uppercase tracking-[0.2em] text-brand-300">SmartCheck</p>
+          <h1 className="text-3xl font-extrabold text-white">Gestão operacional industrial</h1>
+          <p className="mt-1 text-sm text-slate-300">Acesse com seu usuário para continuar.</p>
         </div>
-        <label className="block text-sm font-medium">Email
-          <input className="input mt-1" value={email} onChange={(event) => setEmail(event.target.value)} />
-        </label>
-        <label className="block text-sm font-medium">Senha
-          <input className="input mt-1" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-        </label>
-        {error && <p className="rounded-lg bg-red-100 p-2 text-sm text-red-700">{error}</p>}
-        <button className="btn-primary w-full" disabled={loading}>
+
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-slate-200">
+            E-mail
+            <input className="input mt-1" value={email} onChange={(event) => setEmail(event.target.value)} />
+          </label>
+          <label className="block text-sm font-medium text-slate-200">
+            Senha
+            <input className="input mt-1" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+          </label>
+        </div>
+
+        {error && <p className="mt-3 rounded-xl bg-red-100 p-2 text-sm text-red-700">{error}</p>}
+
+        <button className="btn-primary mt-4 w-full" disabled={loading}>
           {loading ? "Entrando..." : "Entrar"}
         </button>
       </form>

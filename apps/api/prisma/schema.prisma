@@ -9,42 +9,75 @@ datasource db {
 
 enum UserRole {
   ADMIN
-  MAINTENANCE
-  OPERATOR
-  SAFETY
+  MANUTENCAO
+  OPERADOR
+  SEGURANCA_DO_TRABALHO
+  ALMOXARIFADO
 }
 
-enum ChecklistResponseType {
-  OK_PROBLEM_NA
-  YES_NO
-  NUMBER
-  TEXT
+enum BiometricStatus {
+  SEM_BIOMETRIA
+  CADASTRADA
+  PENDENTE
 }
 
-enum ChecklistItemResult {
+enum BiometricProvider {
+  UAREU_4500
+  MOCK
+  OUTRO
+}
+
+enum EquipmentType {
+  MAQUINA
+  VEICULO
+  EQUIPAMENTO
+}
+
+enum ChecklistPeriodicity {
+  DIARIO
+  SEMANAL
+  MENSAL
+}
+
+enum ChecklistItemType {
+  OK_PROBLEMA_NA
+  SIM_NAO
+  NUMERO
+  TEXTO
+}
+
+enum ChecklistOptionResult {
   OK
-  PROBLEM
+  PROBLEMA
   NA
-  YES
-  NO
+}
+
+enum EpiMovementType {
+  ENTREGA
+  DEVOLUCAO
+}
+
+enum ConfirmationMethod {
+  LOGIN
+  BIOMETRIA
 }
 
 enum MaintenanceType {
-  PREVENTIVE
-  CORRECTIVE
+  PREVENTIVA
+  CORRETIVA
 }
 
 enum MaintenanceStatus {
-  OPEN
-  IN_PROGRESS
-  DONE
+  ABERTA
+  EM_ANDAMENTO
+  CONCLUIDA
 }
 
 enum MaintenancePriority {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
 }
 
 enum MaintenancePlanTriggerType {
@@ -59,166 +92,222 @@ enum MaintenancePlanAlertState {
   DUE
 }
 
+model Employee {
+  id           String             @id @default(cuid())
+  name         String
+  registration String             @unique
+  cpf          String?            @unique
+  department   String
+  position     String
+  phone        String?
+  email        String?
+  isActive     Boolean            @default(true)
+  notes        String?
+  user         User?
+  biometric    EmployeeBiometric?
+
+  checklistExecutions ChecklistExecution[]
+  maintenances        Maintenance[]
+  epiMovements        EpiDelivery[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String
   role         UserRole
   isActive     Boolean  @default(true)
-  employeeId   String   @unique
-  employee     Employee @relation(fields: [employeeId], references: [id])
-  epiDeliveriesGiven EpiDelivery[] @relation("DeliveriesByUser")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  employeeId   String?  @unique
+  employee     Employee? @relation(fields: [employeeId], references: [id])
+
+  epiDeliveriesAsResponsible EpiDelivery[] @relation("EpiDeliveryResponsible")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model Employee {
-  id                String        @id @default(cuid())
-  name              String
-  registration      String        @unique
-  department        String
-  function          String
-  active            Boolean       @default(true)
-  biometricTemplate String?
-  user              User?
-  epiDeliveries     EpiDelivery[]
-  checklistRuns     ChecklistExecution[] @relation("ChecklistOperator")
-  maintenances      Maintenance[] @relation("MaintenanceResponsible")
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+model EmployeeBiometric {
+  id                   String           @id @default(cuid())
+  employeeId           String           @unique
+  employee             Employee         @relation(fields: [employeeId], references: [id])
+  biometricTemplateId  String?
+  biometricExternalId  String?
+  provider             BiometricProvider
+  status               BiometricStatus  @default(PENDENTE)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 }
 
 model Epi {
-  id          String        @id @default(cuid())
-  name        String        @unique
-  description String?
-  active      Boolean       @default(true)
-  deliveries  EpiDelivery[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id            String       @id @default(cuid())
+  name          String
+  description   String?
+  ca            String
+  category      String
+  validityDate  DateTime?
+  unit          String
+  stock         Int          @default(0)
+  minimumStock  Int          @default(0)
+  isActive      Boolean      @default(true)
+
+  movements     EpiDelivery[]
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([name, ca])
 }
 
 model EpiDelivery {
-  id               String      @id @default(cuid())
-  employeeId       String
-  employee         Employee    @relation(fields: [employeeId], references: [id])
-  epiId            String
-  epi              Epi         @relation(fields: [epiId], references: [id])
-  quantity         Int
-  caNumber         String
-  deliveredAt      DateTime
-  deliveredByUserId String?
-  deliveredByUser  User?       @relation(fields: [deliveredByUserId], references: [id], name: "DeliveriesByUser")
-  notes            String?
-  attachments      Attachment[]
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  id                          String              @id @default(cuid())
+  employeeId                  String
+  employee                    Employee            @relation(fields: [employeeId], references: [id])
+  epiId                       String
+  epi                         Epi                 @relation(fields: [epiId], references: [id])
+  movementType                EpiMovementType     @default(ENTREGA)
+  quantity                    Int
+  date                        DateTime            @default(now())
+  responsibleUserId           String?
+  responsibleUser             User?               @relation("EpiDeliveryResponsible", fields: [responsibleUserId], references: [id])
+  notes                       String?
+  confirmationMethod          ConfirmationMethod  @default(LOGIN)
+  confirmationBiometricId     String?
+
+  attachments                 Attachment[]
+
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
 }
 
 model Equipment {
-  id                String               @id @default(cuid())
-  name              String
-  type              String
-  department        String
-  model             String?
-  serialNumber      String?              @unique
-  hourmeter         Float?
-  mileage           Float?
-  active            Boolean              @default(true)
+  id            String         @id @default(cuid())
+  name          String
+  type          EquipmentType
+  department    String
+  model         String?
+  serialNumber  String?
+  hourmeter     Float?
+  mileage       Float?
+  manufacturer  String?
+  assetTag      String?
+  notes         String?
+  isActive      Boolean        @default(true)
+
   checklistTemplates ChecklistTemplate[]
-  checklistRuns     ChecklistExecution[]
-  maintenances      Maintenance[]
-  maintenancePlans  MaintenancePlan[]
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  checklistExecutions ChecklistExecution[]
+  maintenances       Maintenance[]
+  maintenancePlans   MaintenancePlan[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([serialNumber])
 }
 
 model ChecklistTemplate {
-  id            String                  @id @default(cuid())
+  id            String               @id @default(cuid())
   name          String
   description   String?
-  periodicity   String
+  periodicity   ChecklistPeriodicity
   equipmentId   String
-  equipment     Equipment               @relation(fields: [equipmentId], references: [id])
+  equipment     Equipment            @relation(fields: [equipmentId], references: [id])
+  isActive      Boolean              @default(true)
+
   items         ChecklistTemplateItem[]
   executions    ChecklistExecution[]
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ChecklistTemplateItem {
-  id             String                @id @default(cuid())
-  templateId     String
-  template       ChecklistTemplate     @relation(fields: [templateId], references: [id])
-  label          String
-  instruction    String?
-  responseType   ChecklistResponseType
-  position       Int
-  required       Boolean               @default(true)
-  createsMaintenanceOnProblem Boolean  @default(true)
+  id                          String             @id @default(cuid())
+  templateId                  String
+  template                    ChecklistTemplate  @relation(fields: [templateId], references: [id])
+  label                       String
+  instruction                 String?
+  itemType                    ChecklistItemType
+  position                    Int
+  required                    Boolean            @default(true)
+  requiresObservationOnProblem Boolean           @default(true)
+  allowsPhotoOnProblem        Boolean            @default(true)
+  opensMaintenanceOnProblem   Boolean            @default(true)
+
   executionItems ChecklistExecutionItem[]
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ChecklistExecution {
-  id            String                   @id @default(cuid())
-  templateId    String
-  template      ChecklistTemplate        @relation(fields: [templateId], references: [id])
-  equipmentId   String
-  equipment     Equipment                @relation(fields: [equipmentId], references: [id])
-  operatorId    String
-  operator      Employee                 @relation("ChecklistOperator", fields: [operatorId], references: [id])
-  executedAt    DateTime                 @default(now())
-  notes         String?
-  hadProblem    Boolean                  @default(false)
-  items         ChecklistExecutionItem[]
-  maintenances  Maintenance[]
-  attachments   Attachment[]
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
+  id          String             @id @default(cuid())
+  templateId  String
+  template    ChecklistTemplate  @relation(fields: [templateId], references: [id])
+  equipmentId String
+  equipment   Equipment          @relation(fields: [equipmentId], references: [id])
+  employeeId  String
+  employee    Employee           @relation(fields: [employeeId], references: [id])
+  executedAt  DateTime           @default(now())
+  notes       String?
+  hadProblem  Boolean            @default(false)
+
+  items       ChecklistExecutionItem[]
+  maintenances Maintenance[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ChecklistExecutionItem {
-  id               String              @id @default(cuid())
+  id               String                 @id @default(cuid())
   executionId      String
-  execution        ChecklistExecution  @relation(fields: [executionId], references: [id])
+  execution        ChecklistExecution     @relation(fields: [executionId], references: [id])
   templateItemId   String
-  templateItem     ChecklistTemplateItem @relation(fields: [templateItemId], references: [id])
-  result           ChecklistItemResult?
+  templateItem     ChecklistTemplateItem  @relation(fields: [templateItemId], references: [id])
+
+  optionResult     ChecklistOptionResult?
+  booleanResult    Boolean?
   numericValue     Float?
   textValue        String?
-  problemDescription String?
+  observation      String?
+  hadProblem       Boolean                @default(false)
+
   attachments      Attachment[]
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Maintenance {
-  id                 String              @id @default(cuid())
-  equipmentId        String
-  equipment          Equipment           @relation(fields: [equipmentId], references: [id])
-  type               MaintenanceType
-  description        String
-  status             MaintenanceStatus   @default(OPEN)
-  priority           MaintenancePriority @default(MEDIUM)
-  responsibleId      String?
-  responsible        Employee?           @relation("MaintenanceResponsible", fields: [responsibleId], references: [id])
-  checklistExecutionId String?
-  checklistExecution ChecklistExecution? @relation(fields: [checklistExecutionId], references: [id])
-  openedAt           DateTime            @default(now())
-  startedAt          DateTime?
-  finishedAt         DateTime?
-  history            String?
-  attachments        Attachment[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id                    String              @id @default(cuid())
+  equipmentId           String
+  equipment             Equipment           @relation(fields: [equipmentId], references: [id])
+  checklistExecutionId  String?
+  checklistExecution    ChecklistExecution? @relation(fields: [checklistExecutionId], references: [id])
+  type                  MaintenanceType
+  priority              MaintenancePriority @default(MEDIA)
+  status                MaintenanceStatus   @default(ABERTA)
+  description           String
+  cause                 String?
+  responsibleId         String?
+  responsible           Employee?           @relation(fields: [responsibleId], references: [id])
+  openedAt              DateTime            @default(now())
+  concludedAt           DateTime?
+  notes                 String?
+
+  attachments           Attachment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model MaintenancePlan {
-  id                 String                   @id @default(cuid())
+  id                 String                    @id @default(cuid())
   equipmentId        String
-  equipment          Equipment                @relation(fields: [equipmentId], references: [id])
+  equipment          Equipment                 @relation(fields: [equipmentId], references: [id])
   title              String
   description        String?
   triggerType        MaintenancePlanTriggerType
@@ -226,23 +315,23 @@ model MaintenancePlan {
   nearThreshold      Float?
   lastExecutionDate  DateTime?
   lastExecutionValue Float?
-  active             Boolean                  @default(true)
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
+  isActive           Boolean                   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Attachment {
-  id                     String                 @id @default(cuid())
-  filename               String
-  mimeType               String
-  path                   String
-  checklistExecutionId   String?
-  checklistExecution     ChecklistExecution?    @relation(fields: [checklistExecutionId], references: [id])
-  checklistExecutionItemId String?
-  checklistExecutionItem ChecklistExecutionItem? @relation(fields: [checklistExecutionItemId], references: [id])
-  maintenanceId          String?
-  maintenance            Maintenance?           @relation(fields: [maintenanceId], references: [id])
-  epiDeliveryId          String?
-  epiDelivery            EpiDelivery?           @relation(fields: [epiDeliveryId], references: [id])
-  createdAt              DateTime               @default(now())
+  id                        String                 @id @default(cuid())
+  filename                  String
+  mimeType                  String
+  path                      String
+  maintenanceId             String?
+  maintenance               Maintenance?           @relation(fields: [maintenanceId], references: [id])
+  checklistExecutionItemId  String?
+  checklistExecutionItem    ChecklistExecutionItem? @relation(fields: [checklistExecutionItemId], references: [id])
+  epiDeliveryId             String?
+  epiDelivery               EpiDelivery?           @relation(fields: [epiDeliveryId], references: [id])
+
+  createdAt DateTime @default(now())
 }

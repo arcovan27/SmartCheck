@@ -1,65 +1,105 @@
-import type { FastifyInstance } from "fastify";
+﻿import type { FastifyInstance } from "fastify";
+import {
+  ChecklistItemType,
+  ChecklistOptionResult,
+  ChecklistPeriodicity,
+  MaintenancePriority,
+  MaintenanceStatus,
+  MaintenanceType
+} from "@prisma/client";
 import { z } from "zod";
-import { ChecklistItemResult, ChecklistResponseType, MaintenancePriority, MaintenanceType } from "@prisma/client";
 import { prisma } from "../prisma.js";
 
-const itemPayloadSchema = z.object({
+const executionItemSchema = z.object({
   templateItemId: z.string().cuid(),
-  result: z.nativeEnum(ChecklistItemResult).optional().nullable(),
+  optionResult: z.nativeEnum(ChecklistOptionResult).optional().nullable(),
+  booleanResult: z.boolean().optional().nullable(),
   numericValue: z.number().optional().nullable(),
   textValue: z.string().optional().nullable(),
-  problemDescription: z.string().optional().nullable(),
+  observation: z.string().optional().nullable(),
   attachmentIds: z.array(z.string().cuid()).optional()
 });
 
-function isProblemResult(result: ChecklistItemResult | null | undefined): boolean {
-  return result === ChecklistItemResult.PROBLEM || result === ChecklistItemResult.NO;
+function isProblem(itemType: ChecklistItemType, item: z.infer<typeof executionItemSchema>): boolean {
+  if (itemType === ChecklistItemType.OK_PROBLEMA_NA) {
+    return item.optionResult === ChecklistOptionResult.PROBLEMA;
+  }
+  if (itemType === ChecklistItemType.SIM_NAO) {
+    return item.booleanResult === false;
+  }
+  return false;
 }
 
-function validateItemInput(responseType: ChecklistResponseType, item: z.infer<typeof itemPayloadSchema>) {
-  if (responseType === ChecklistResponseType.OK_PROBLEM_NA || responseType === ChecklistResponseType.YES_NO) {
-    if (!item.result) {
-      throw new Error("Resultado obrigat�rio para item de op��o");
-    }
+function validateByType(itemType: ChecklistItemType, item: z.infer<typeof executionItemSchema>) {
+  if (itemType === ChecklistItemType.OK_PROBLEMA_NA && !item.optionResult) {
+    throw new Error("Resultado obrigatório para item OK/Problema/N/A");
   }
 
-  if (responseType === ChecklistResponseType.NUMBER && item.numericValue === null) {
-    throw new Error("Valor num�rico obrigat�rio");
+  if (itemType === ChecklistItemType.SIM_NAO && item.booleanResult === null) {
+    throw new Error("Resultado obrigatório para item Sim/Não");
   }
 
-  if (responseType === ChecklistResponseType.TEXT && !item.textValue) {
-    throw new Error("Texto obrigat�rio");
+  if (itemType === ChecklistItemType.NUMERO && item.numericValue === null) {
+    throw new Error("Valor numérico obrigatório");
+  }
+
+  if (itemType === ChecklistItemType.TEXTO && !item.textValue?.trim()) {
+    throw new Error("Texto obrigatório");
   }
 }
 
 export async function checklistRoutes(app: FastifyInstance) {
   app.get("/checklist-templates", { preHandler: [app.authenticate] }, async (request) => {
-    const query = z.object({ equipmentId: z.string().cuid().optional() }).parse(request.query);
+    const query = z
+      .object({
+        equipmentId: z.string().cuid().optional(),
+        isActive: z
+          .string()
+          .optional()
+          .transform((value) => {
+            if (value === undefined) return undefined;
+            return value === "true";
+          })
+      })
+      .parse(request.query);
 
     return prisma.checklistTemplate.findMany({
-      where: query.equipmentId ? { equipmentId: query.equipmentId } : undefined,
-      include: { items: { orderBy: { position: "asc" } }, equipment: true },
+      where: {
+        equipmentId: query.equipmentId,
+        isActive: query.isActive
+      },
+      include: {
+        equipment: true,
+        items: { orderBy: { position: "asc" } }
+      },
       orderBy: { name: "asc" }
     });
   });
 
   app.post("/checklist-templates", { preHandler: [app.authenticate] }, async (request, reply) => {
-    const body = z.object({
-      name: z.string().min(2),
-      description: z.string().optional().nullable(),
-      periodicity: z.enum(["DIARIO", "SEMANAL", "MENSAL"]),
-      equipmentId: z.string().cuid(),
-      items: z.array(
-        z.object({
-          label: z.string().min(2),
-          instruction: z.string().optional().nullable(),
-          responseType: z.nativeEnum(ChecklistResponseType),
-          position: z.number().int().nonnegative(),
-          required: z.boolean().optional(),
-          createsMaintenanceOnProblem: z.boolean().optional()
-        })
-      ).min(1)
-    }).parse(request.body);
+    const body = z
+      .object({
+        name: z.string().min(2),
+        description: z.string().optional().nullable(),
+        periodicity: z.nativeEnum(ChecklistPeriodicity),
+        equipmentId: z.string().cuid(),
+        isActive: z.boolean().optional(),
+        items: z
+          .array(
+            z.object({
+              label: z.string().min(2),
+              instruction: z.string().optional().nullable(),
+              itemType: z.nativeEnum(ChecklistItemType),
+              position: z.number().int().nonnegative(),
+              required: z.boolean().optional(),
+              requiresObservationOnProblem: z.boolean().optional(),
+              allowsPhotoOnProblem: z.boolean().optional(),
+              opensMaintenanceOnProblem: z.boolean().optional()
+            })
+          )
+          .min(1)
+      })
+      .parse(request.body);
 
     const template = await prisma.checklistTemplate.create({
       data: {
@@ -67,48 +107,112 @@ export async function checklistRoutes(app: FastifyInstance) {
         description: body.description,
         periodicity: body.periodicity,
         equipmentId: body.equipmentId,
+        isActive: body.isActive ?? true,
         items: {
           create: body.items
         }
       },
-      include: { items: { orderBy: { position: "asc" } } }
+      include: { items: { orderBy: { position: "asc" } }, equipment: true }
     });
 
     return reply.code(201).send(template);
   });
 
+  app.patch("/checklist-templates/:id", { preHandler: [app.authenticate] }, async (request) => {
+    const params = z.object({ id: z.string().cuid() }).parse(request.params);
+
+    const body = z
+      .object({
+        name: z.string().min(2).optional(),
+        description: z.string().optional().nullable(),
+        periodicity: z.nativeEnum(ChecklistPeriodicity).optional(),
+        isActive: z.boolean().optional(),
+        items: z
+          .array(
+            z.object({
+              label: z.string().min(2),
+              instruction: z.string().optional().nullable(),
+              itemType: z.nativeEnum(ChecklistItemType),
+              position: z.number().int().nonnegative(),
+              required: z.boolean().optional(),
+              requiresObservationOnProblem: z.boolean().optional(),
+              allowsPhotoOnProblem: z.boolean().optional(),
+              opensMaintenanceOnProblem: z.boolean().optional()
+            })
+          )
+          .optional()
+      })
+      .parse(request.body);
+
+    return prisma.$transaction(async (tx) => {
+      if (body.items) {
+        await tx.checklistTemplateItem.deleteMany({ where: { templateId: params.id } });
+      }
+
+      return tx.checklistTemplate.update({
+        where: { id: params.id },
+        data: {
+          name: body.name,
+          description: body.description,
+          periodicity: body.periodicity,
+          isActive: body.isActive,
+          items: body.items ? { create: body.items } : undefined
+        },
+        include: {
+          equipment: true,
+          items: { orderBy: { position: "asc" } }
+        }
+      });
+    });
+  });
+
   app.get("/checklist-executions", { preHandler: [app.authenticate] }, async (request) => {
-    const query = z.object({
-      equipmentId: z.string().cuid().optional(),
-      templateId: z.string().cuid().optional()
-    }).parse(request.query);
+    const query = z
+      .object({
+        equipmentId: z.string().cuid().optional(),
+        employeeId: z.string().cuid().optional(),
+        hadProblem: z
+          .string()
+          .optional()
+          .transform((value) => {
+            if (value === undefined) return undefined;
+            return value === "true";
+          })
+      })
+      .parse(request.query);
 
     return prisma.checklistExecution.findMany({
       where: {
         equipmentId: query.equipmentId,
-        templateId: query.templateId
+        employeeId: query.employeeId,
+        hadProblem: query.hadProblem
       },
       include: {
         template: true,
         equipment: true,
-        operator: true,
-        items: { include: { templateItem: true, attachments: true } },
-        maintenances: true,
-        attachments: true
+        employee: true,
+        items: {
+          include: {
+            templateItem: true,
+            attachments: true
+          }
+        },
+        maintenances: true
       },
       orderBy: { executedAt: "desc" }
     });
   });
 
   app.post("/checklist-executions", { preHandler: [app.authenticate] }, async (request, reply) => {
-    const body = z.object({
-      templateId: z.string().cuid(),
-      equipmentId: z.string().cuid(),
-      operatorId: z.string().cuid(),
-      notes: z.string().optional().nullable(),
-      attachmentIds: z.array(z.string().cuid()).optional(),
-      items: z.array(itemPayloadSchema).min(1)
-    }).parse(request.body);
+    const body = z
+      .object({
+        templateId: z.string().cuid(),
+        equipmentId: z.string().cuid(),
+        employeeId: z.string().cuid(),
+        notes: z.string().optional().nullable(),
+        items: z.array(executionItemSchema).min(1)
+      })
+      .parse(request.body);
 
     const template = await prisma.checklistTemplate.findUnique({
       where: { id: body.templateId },
@@ -116,72 +220,82 @@ export async function checklistRoutes(app: FastifyInstance) {
     });
 
     if (!template) {
-      return reply.code(404).send({ message: "Template n�o encontrado" });
+      return reply.code(404).send({ message: "Modelo de checklist não encontrado" });
     }
 
-    const templateItemMap = new Map(template.items.map((item) => [item.id, item]));
+    const mapById = new Map(template.items.map((item) => [item.id, item]));
 
-    for (const itemInput of body.items) {
-      const templateItem = templateItemMap.get(itemInput.templateItemId);
+    for (const inputItem of body.items) {
+      const templateItem = mapById.get(inputItem.templateItemId);
       if (!templateItem) {
-        return reply.code(400).send({ message: `Item ${itemInput.templateItemId} n�o pertence ao template` });
+        return reply
+          .code(400)
+          .send({ message: `Item inválido: ${inputItem.templateItemId} não pertence ao modelo` });
       }
 
-      validateItemInput(templateItem.responseType, itemInput);
+      validateByType(templateItem.itemType, inputItem);
 
-      const isProblem = isProblemResult(itemInput.result);
-      if (isProblem) {
-        if (!itemInput.problemDescription?.trim()) {
-          return reply.code(400).send({ message: `Descri��o obrigat�ria para problema no item: ${templateItem.label}` });
+      if (isProblem(templateItem.itemType, inputItem)) {
+        if (templateItem.requiresObservationOnProblem && !inputItem.observation?.trim()) {
+          return reply
+            .code(400)
+            .send({ message: `Observação obrigatória para problema no item "${templateItem.label}"` });
         }
 
-        if (!itemInput.attachmentIds || itemInput.attachmentIds.length === 0) {
-          return reply.code(400).send({ message: `Foto obrigat�ria para problema no item: ${templateItem.label}` });
+        if (templateItem.allowsPhotoOnProblem && (!inputItem.attachmentIds || inputItem.attachmentIds.length === 0)) {
+          return reply
+            .code(400)
+            .send({ message: `Foto obrigatória para problema no item "${templateItem.label}"` });
         }
       }
     }
 
-    const hasProblem = body.items.some((itemInput) => isProblemResult(itemInput.result));
+    const hadProblem = body.items.some((item) => {
+      const templateItem = mapById.get(item.templateItemId)!;
+      return isProblem(templateItem.itemType, item);
+    });
 
     const execution = await prisma.$transaction(async (tx) => {
       const createdExecution = await tx.checklistExecution.create({
         data: {
           templateId: body.templateId,
           equipmentId: body.equipmentId,
-          operatorId: body.operatorId,
+          employeeId: body.employeeId,
           notes: body.notes,
-          hadProblem: hasProblem,
-          attachments: body.attachmentIds
-            ? { connect: body.attachmentIds.map((id) => ({ id })) }
-            : undefined
+          hadProblem
         }
       });
 
-      for (const itemInput of body.items) {
-        const templateItem = templateItemMap.get(itemInput.templateItemId)!;
-        const executionItem = await tx.checklistExecutionItem.create({
+      for (const inputItem of body.items) {
+        const templateItem = mapById.get(inputItem.templateItemId)!;
+        const problem = isProblem(templateItem.itemType, inputItem);
+
+        await tx.checklistExecutionItem.create({
           data: {
             executionId: createdExecution.id,
-            templateItemId: itemInput.templateItemId,
-            result: itemInput.result,
-            numericValue: itemInput.numericValue,
-            textValue: itemInput.textValue,
-            problemDescription: itemInput.problemDescription,
-            attachments: itemInput.attachmentIds
-              ? { connect: itemInput.attachmentIds.map((id) => ({ id })) }
+            templateItemId: inputItem.templateItemId,
+            optionResult: inputItem.optionResult,
+            booleanResult: inputItem.booleanResult,
+            numericValue: inputItem.numericValue,
+            textValue: inputItem.textValue,
+            observation: inputItem.observation,
+            hadProblem: problem,
+            attachments: inputItem.attachmentIds
+              ? { connect: inputItem.attachmentIds.map((id) => ({ id })) }
               : undefined
           }
         });
 
-        if (templateItem.createsMaintenanceOnProblem && isProblemResult(itemInput.result)) {
+        if (templateItem.opensMaintenanceOnProblem && problem) {
           await tx.maintenance.create({
             data: {
               equipmentId: body.equipmentId,
-              type: MaintenanceType.CORRECTIVE,
-              description: `[Checklist] ${templateItem.label}: ${itemInput.problemDescription}`,
-              priority: MaintenancePriority.HIGH,
               checklistExecutionId: createdExecution.id,
-              history: `Ocorr�ncia criada automaticamente no item ${templateItem.label} (${executionItem.id})`
+              type: MaintenanceType.CORRETIVA,
+              priority: MaintenancePriority.ALTA,
+              status: MaintenanceStatus.ABERTA,
+              description: `[Checklist] ${templateItem.label}`,
+              cause: inputItem.observation
             }
           });
         }
@@ -190,12 +304,11 @@ export async function checklistRoutes(app: FastifyInstance) {
       return tx.checklistExecution.findUniqueOrThrow({
         where: { id: createdExecution.id },
         include: {
-          items: { include: { templateItem: true, attachments: true } },
-          maintenances: true,
-          equipment: true,
-          operator: true,
           template: true,
-          attachments: true
+          equipment: true,
+          employee: true,
+          items: { include: { templateItem: true, attachments: true } },
+          maintenances: true
         }
       });
     });

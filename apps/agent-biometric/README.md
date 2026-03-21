@@ -1,14 +1,10 @@
-# Agent Biometric (placeholder)
+﻿# Agent Biometric (placeholder)
 
-Este m�dulo est� reservado para o agente de biometria em .NET (futuro) que integra com o leitor U.are.U 4500.
+Módulo reservado para o agente local em Windows/.NET que fará integração com leitor biométrico (ex.: U.are.U 4500).
 
-Contrato previsto:
-- O agente identifica a digital e envia `employeeId` para `POST /biometric/identify` na API SmartCheck.
-- A API retorna os dados do funcion�rio para autorizar fluxos (ex.: retirada de EPI).
+Fluxo esperado:
+1. Agente local captura/identifica digital.
+2. Agente chama API SmartCheck (`/biometric/identify`, `/biometric/enroll/start`, `/biometric/enroll/finish`).
+3. API retorna funcionário identificado para autorização de fluxos (EPI, confirmação de recebimento, posto operacional).
 
-Exemplo de payload:
-```json
-{
-  "employeeId": "cm123..."
-}
-```
+Nenhuma captura biométrica direta é feita no navegador.

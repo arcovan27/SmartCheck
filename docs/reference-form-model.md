@@ -1,44 +1,27 @@
-# Base operacional extraída dos arquivos enviados
+ï»¿# ReferÃªncia Operacional
 
-Este documento resume a lógica dos formulários originais usados como base no SmartCheck.
+Documento resumido dos fluxos industriais que orientam o SmartCheck.
 
-## Controle de EPI (`EPI.pdf`)
-- Campos principais: `Empresa`, `Departamento/Seção`, `Nome`, `Admissão`, `Setor`, `Mês referência`, `Função`, `Demissão`.
-- Termo de responsabilidade de uso e conservação do EPI.
-- Grade de entregas com colunas: `Data Entrega`, `Quantidade`, `C.A.`, `Descrição`, `Assinatura Funcionário`, `Entregue por`.
-- No sistema digital:
-  - Registro de entrega com funcionário, EPI, quantidade, CA, data e responsável.
-  - Histórico por funcionário e relatório.
+## EPI
+- Entrega e devoluÃ§Ã£o por funcionÃ¡rio.
+- Controle de quantidade, CA, responsÃ¡vel e mÃ©todo de confirmaÃ§Ã£o.
+- Ficha individual de EPI para auditoria.
 
-## Checklists de máquinas/veículos
+## Checklists
+- Modelo por equipamento e periodicidade (diÃ¡rio, semanal, mensal).
+- Tipos de resposta:
+  - OK / Problema / N/A
+  - Sim / NÃ£o
+  - NÃºmero
+  - Texto
+- Regra crÃ­tica: problema exige observaÃ§Ã£o e foto.
+- Problema pode abrir manutenÃ§Ã£o corretiva automaticamente.
 
-Padrão comum dos formulários:
-- Inspeção por dia do mês (1..31) ou semanal (ex.: Seg..Sex).
-- Legenda operacional:
-  - `OK` = funcionamento normal/bom estado
-  - `X` = mau funcionamento ou dano
-  - `I` = equipamento parado/sem uso
-  - `N/A` = item não avaliável
-- Regra crítica: ao marcar problema (`X`), descrição de defeito é obrigatória.
-- Campos operacionais: operador, mês/ano, área de observações e visto de encarregado.
+## ManutenÃ§Ã£o
+- Abertura manual ou automÃ¡tica via checklist.
+- ClassificaÃ§Ã£o por tipo (preventiva/corretiva), prioridade e status.
+- Alertas preventivos por dias, KM e horÃ­metro.
 
-### Modelos identificados
-- `Checklist Diário de Empilhadeira` (semanal no formulário) com itens de segurança, iluminação, comando, torre, GLP e EPIs.
-- `Checklist Pá Carregadeira` com itens de motor, sistema elétrico, hidráulico, pneus e extintor.
-- `Checklist Diário Misturador - Massa Tubos` com itens de painel, emergência, hidráulica, comportas, esteiras e segurança da plataforma.
-- `Checklist Diário Prensa Tubos Manual (01)`.
-- `Checklist Diário Prensa Tubos Manual (02)`.
-- `Checklist Caminhão Munck` (arquivo XLS), dividido em bloco `GUINDASTE` e bloco `CAMINHÃO`.
-
-## Fluxo de manutenção
-- Defeito identificado em checklist gera ocorrência de manutenção corretiva.
-- No SmartCheck:
-  - Problema exige descrição e foto (obrigatório).
-  - Ocorrência corretiva é aberta automaticamente.
-
-## Preventiva
-- O sistema adiciona regras automáticas por:
-  - dias,
-  - KM,
-  - horímetro.
-- Estados de alerta: `OK`, `NEAR`, `DUE`.
+## Biometria
+- Estrutura pronta para integraÃ§Ã£o com agente local Windows/.NET.
+- Endpoints preparados para iniciar/finalizar cadastro e identificar funcionÃ¡rio.

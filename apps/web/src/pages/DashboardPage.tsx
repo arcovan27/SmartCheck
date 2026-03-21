@@ -1,62 +1,113 @@
-import { useQuery } from "@tanstack/react-query";
+﻿import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "../lib/api";
+import { maintenancePriorityLabels, maintenanceStatusLabels } from "../lib/constants";
 
-type AlertItem = {
-  equipment: { name: string };
-  plan: { title: string };
-  alert: { state: "OK" | "NEAR" | "DUE"; currentValue: number; threshold: number; triggerType: string };
+type DashboardResponse = {
+  cards: {
+    activeEmployees: number;
+    totalEpis: number;
+    activeEquipments: number;
+    openMaintenances: number;
+    pendingChecklists: number;
+    duePreventiveAlerts: number;
+  };
+  recentMaintenances: Array<any>;
+  recentChecklistProblems: Array<any>;
+  recentEpiDeliveries: Array<any>;
 };
 
 export function DashboardPage() {
-  const alertsQuery = useQuery({
-    queryKey: ["maintenance-alerts"],
-    queryFn: () => apiRequest<AlertItem[]>("/maintenance-alerts")
+  const summaryQuery = useQuery({
+    queryKey: ["dashboard-summary"],
+    queryFn: () => apiRequest<DashboardResponse>("/dashboard/summary")
   });
 
-  const maintenanceQuery = useQuery({
-    queryKey: ["maintenances"],
-    queryFn: () => apiRequest<any[]>("/maintenances")
-  });
+  if (summaryQuery.isLoading) {
+    return <div className="card">Carregando dashboard...</div>;
+  }
 
-  const checklistQuery = useQuery({
-    queryKey: ["checklist-executions"],
-    queryFn: () => apiRequest<any[]>("/checklist-executions")
-  });
+  if (summaryQuery.isError || !summaryQuery.data) {
+    return <div className="card text-red-700">Falha ao carregar o dashboard.</div>;
+  }
 
-  const dueAlerts = alertsQuery.data?.filter((item) => item.alert.state !== "OK") ?? [];
+  const { cards, recentMaintenances, recentChecklistProblems, recentEpiDeliveries } = summaryQuery.data;
 
   return (
     <div className="space-y-4">
-      <section className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="card">
+          <p className="text-sm text-slate-500">Funcionários ativos</p>
+          <p className="kpi-value text-brand-700">{cards.activeEmployees}</p>
+        </div>
+        <div className="card">
+          <p className="text-sm text-slate-500">EPIs cadastrados</p>
+          <p className="kpi-value text-brand-700">{cards.totalEpis}</p>
+        </div>
+        <div className="card">
+          <p className="text-sm text-slate-500">Equipamentos ativos</p>
+          <p className="kpi-value text-brand-700">{cards.activeEquipments}</p>
+        </div>
+        <div className="card">
+          <p className="text-sm text-slate-500">Manutenções em aberto</p>
+          <p className="kpi-value text-red-700">{cards.openMaintenances}</p>
+        </div>
+        <div className="card">
+          <p className="text-sm text-slate-500">Checklists pendentes</p>
+          <p className="kpi-value text-amber-700">{cards.pendingChecklists}</p>
+        </div>
         <div className="card">
           <p className="text-sm text-slate-500">Alertas preventivos</p>
-          <p className="text-3xl font-bold text-amber-600">{dueAlerts.length}</p>
+          <p className="kpi-value text-orange-700">{cards.duePreventiveAlerts}</p>
         </div>
-        <div className="card">
-          <p className="text-sm text-slate-500">Manuten��es abertas</p>
-          <p className="text-3xl font-bold text-red-600">{maintenanceQuery.data?.filter((m) => m.status !== "DONE").length ?? 0}</p>
-        </div>
-        <div className="card">
-          <p className="text-sm text-slate-500">Checklists executados</p>
-          <p className="text-3xl font-bold text-brand-700">{checklistQuery.data?.length ?? 0}</p>
-        </div>
-      </section>
+      </div>
 
-      <section className="card space-y-3">
-        <h2 className="text-lg font-bold">Alertas de Preventiva</h2>
-        {alertsQuery.isLoading && <p>Carregando...</p>}
-        {!alertsQuery.isLoading && dueAlerts.length === 0 && <p className="text-sm text-slate-500">Sem alertas pr�ximos/vencidos.</p>}
-        <div className="space-y-2">
-          {dueAlerts.map((item, index) => (
-            <div key={`${item.plan.title}-${index}`} className="rounded-xl border border-amber-300 bg-amber-50 p-3">
-              <p className="font-semibold">{item.equipment.name} - {item.plan.title}</p>
-              <p className="text-sm text-slate-700">
-                {item.alert.triggerType}: {item.alert.currentValue.toFixed(1)} / {item.alert.threshold.toFixed(1)} ({item.alert.state})
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="grid gap-4 xl:grid-cols-3">
+        <section className="card">
+          <h2 className="section-title mb-3">Últimas manutenções</h2>
+          <div className="space-y-2">
+            {recentMaintenances.length === 0 && <p className="text-sm text-slate-500">Nenhuma manutenção registrada.</p>}
+            {recentMaintenances.map((item) => (
+              <div key={item.id} className="rounded-xl border border-slate-200 p-3 text-sm">
+                <p className="font-semibold">{item.equipment.name}</p>
+                <p>{item.description}</p>
+                <p className="text-slate-500">
+                  {maintenanceStatusLabels[item.status] ?? item.status} • {maintenancePriorityLabels[item.priority] ?? item.priority}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="card">
+          <h2 className="section-title mb-3">Últimos checklists com problema</h2>
+          <div className="space-y-2">
+            {recentChecklistProblems.length === 0 && <p className="text-sm text-slate-500">Sem problemas recentes.</p>}
+            {recentChecklistProblems.map((item) => (
+              <div key={item.id} className="rounded-xl border border-slate-200 p-3 text-sm">
+                <p className="font-semibold">{item.equipment.name}</p>
+                <p>{item.template.name}</p>
+                <p className="text-slate-500">Operador: {item.employee.name}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="card">
+          <h2 className="section-title mb-3">Últimos EPIs entregues</h2>
+          <div className="space-y-2">
+            {recentEpiDeliveries.length === 0 && <p className="text-sm text-slate-500">Sem movimentações recentes.</p>}
+            {recentEpiDeliveries.map((item) => (
+              <div key={item.id} className="rounded-xl border border-slate-200 p-3 text-sm">
+                <p className="font-semibold">
+                  {item.employee.name} • {item.epi.name}
+                </p>
+                <p>Quantidade: {item.quantity}</p>
+                <p className="text-slate-500">{new Date(item.date).toLocaleString("pt-BR")}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

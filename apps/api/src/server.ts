@@ -13,6 +13,7 @@ import { checklistRoutes } from "./routes/checklists.js";
 import { maintenanceRoutes } from "./routes/maintenance.js";
 import { uploadRoutes } from "./routes/uploads.js";
 import { biometricRoutes } from "./routes/biometric.js";
+import { dashboardRoutes } from "./routes/dashboard.js";
 
 const app = Fastify({ logger: true });
 
@@ -37,6 +38,7 @@ await app.register(authPlugin);
 app.get("/health", async () => ({ status: "ok" }));
 
 await app.register(authRoutes);
+await app.register(dashboardRoutes);
 await app.register(employeeRoutes);
 await app.register(epiRoutes);
 await app.register(equipmentRoutes);
