@@ -198,6 +198,12 @@ export function EmployeesPage() {
           />
         </div>
 
+        {employeesQuery.data?.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+            Nenhum funcionario cadastrado ainda. Use o formulario ao lado para criar o primeiro cadastro.
+          </div>
+        )}
+
         <div className="space-y-2">
           {employeesQuery.data?.map((employee) => (
             <div key={employee.id} className="rounded-xl border border-slate-200 p-3 text-sm">

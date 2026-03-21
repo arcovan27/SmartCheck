@@ -36,6 +36,14 @@ function periodicityLabel(periodicity: string) {
 export function ChecklistsPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const [templateForm, setTemplateForm] = useState({
+    name: "",
+    code: "OUTRO" as ChecklistCode,
+    periodicity: "DIARIO",
+    equipmentId: "",
+    description: "",
+    items: [{ label: "", section: "Itens de inspeção" }]
+  });
   const [equipmentId, setEquipmentId] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [items, setItems] = useState<Record<string, ItemState>>({});
@@ -90,6 +98,22 @@ export function ChecklistsPage() {
       queryClient.invalidateQueries({ queryKey: ["equipment-history"] });
       setItems({});
       setNotes("");
+    }
+  });
+
+  const createTemplate = useMutation({
+    mutationFn: (payload: any) =>
+      apiRequest("/checklist-templates", { method: "POST", body: JSON.stringify(payload) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["checklist-templates"] });
+      setTemplateForm({
+        name: "",
+        code: "OUTRO",
+        periodicity: "DIARIO",
+        equipmentId: "",
+        description: "",
+        items: [{ label: "", section: "Itens de inspeção" }]
+      });
     }
   });
 
@@ -164,10 +188,155 @@ export function ChecklistsPage() {
     });
   }
 
+  function submitTemplate(event: FormEvent) {
+    event.preventDefault();
+    createTemplate.mutate({
+      name: templateForm.name,
+      code: templateForm.code,
+      periodicity: templateForm.periodicity,
+      equipmentId: templateForm.equipmentId,
+      description: templateForm.description || null,
+      items: templateForm.items
+        .filter((item) => item.label.trim())
+        .map((item, index) => ({
+          label: item.label,
+          section: item.section || null,
+          instruction: null,
+          itemType: "OK_PROBLEMA_NA",
+          position: index,
+          required: true,
+          requiresObservationOnProblem: true,
+          allowsPhotoOnProblem: true,
+          requiresPhotoOnProblem: false,
+          opensMaintenanceOnProblem: true
+        }))
+    });
+  }
+
   return (
     <div className="space-y-4">
       <section className="card space-y-3">
+        <h2 className="section-title">Cadastro de modelos de checklist</h2>
+        <p className="text-sm text-slate-500">
+          Se o sistema estiver limpo, cadastre primeiro o equipamento e depois monte aqui os itens que devem ser checados.
+        </p>
+        <form className="space-y-3" onSubmit={submitTemplate}>
+          <div className="grid gap-2 md:grid-cols-2">
+            <input
+              className="input"
+              placeholder="Nome do checklist"
+              value={templateForm.name}
+              onChange={(event) => setTemplateForm((prev) => ({ ...prev, name: event.target.value }))}
+              required
+            />
+            <select
+              className="select"
+              value={templateForm.equipmentId}
+              onChange={(event) => setTemplateForm((prev) => ({ ...prev, equipmentId: event.target.value }))}
+              required
+            >
+              <option value="">Vincular ao equipamento</option>
+              {equipmentsQuery.data?.map((equipment) => (
+                <option key={equipment.id} value={equipment.id}>
+                  {equipment.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <select
+              className="select"
+              value={templateForm.periodicity}
+              onChange={(event) => setTemplateForm((prev) => ({ ...prev, periodicity: event.target.value }))}
+            >
+              <option value="DIARIO">Diario</option>
+              <option value="SEMANAL">Semanal</option>
+              <option value="MENSAL">Mensal</option>
+            </select>
+            <select
+              className="select"
+              value={templateForm.code}
+              onChange={(event) =>
+                setTemplateForm((prev) => ({ ...prev, code: event.target.value as ChecklistCode }))
+              }
+            >
+              <option value="OUTRO">Modelo livre</option>
+              <option value="PRENSA_TUBOS_MANUAL_01">Prensa Tubos Manual 01</option>
+              <option value="PRENSA_TUBOS_MANUAL_02">Prensa Tubos Manual 02</option>
+              <option value="MISTURADOR_MASSA_TUBOS">Misturador Massa de Tubos</option>
+              <option value="PA_CARREGADEIRA">Pa Carregadeira</option>
+              <option value="EMPILHADEIRA_SEMANAL">Empilhadeira</option>
+            </select>
+          </div>
+          <textarea
+            className="textarea"
+            rows={2}
+            placeholder="Descricao do formulario"
+            value={templateForm.description}
+            onChange={(event) => setTemplateForm((prev) => ({ ...prev, description: event.target.value }))}
+          />
+          <div className="space-y-2">
+            {templateForm.items.map((item, index) => (
+              <div key={index} className="grid gap-2 rounded-xl border border-slate-200 p-3 md:grid-cols-[1fr,220px]">
+                <input
+                  className="input"
+                  placeholder={`Item ${index + 1}`}
+                  value={item.label}
+                  onChange={(event) =>
+                    setTemplateForm((prev) => ({
+                      ...prev,
+                      items: prev.items.map((current, currentIndex) =>
+                        currentIndex === index ? { ...current, label: event.target.value } : current
+                      )
+                    }))
+                  }
+                />
+                <input
+                  className="input"
+                  placeholder="Secao"
+                  value={item.section}
+                  onChange={(event) =>
+                    setTemplateForm((prev) => ({
+                      ...prev,
+                      items: prev.items.map((current, currentIndex) =>
+                        currentIndex === index ? { ...current, section: event.target.value } : current
+                      )
+                    }))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() =>
+                setTemplateForm((prev) => ({
+                  ...prev,
+                  items: [...prev.items, { label: "", section: "Itens de inspeção" }]
+                }))
+              }
+            >
+              Adicionar item
+            </button>
+            <button className="btn-primary" disabled={createTemplate.isPending || !equipmentsQuery.data?.length}>
+              {createTemplate.isPending ? "Salvando modelo..." : "Salvar modelo de checklist"}
+            </button>
+          </div>
+          {!equipmentsQuery.data?.length && (
+            <p className="text-sm text-amber-700">
+              Cadastre pelo menos um equipamento para criar um checklist.
+            </p>
+          )}
+        </form>
+      </section>
+
+      <section className="card space-y-3">
         <h2 className="section-title">Execução operacional de checklist</h2>
+        <p className="text-sm text-slate-500">
+          Aqui voce executa o checklist ja cadastrado. Se ainda nao existir, crie o modelo acima.
+        </p>
         <div className="grid gap-2 sm:grid-cols-2">
           <select
             className="select"
@@ -218,7 +387,7 @@ export function ChecklistsPage() {
         <h2 className="section-title">Formulário real digitalizado</h2>
         {!selectedTemplate && (
           <p className="text-sm text-slate-500">
-            Selecione um equipamento e um checklist para preencher o formulário operacional.
+            Selecione um equipamento e um checklist para preencher o formulario operacional.
           </p>
         )}
 

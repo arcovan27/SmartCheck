@@ -17,6 +17,7 @@ import {
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
+const seedMode = (process.env.SEED_MODE ?? "clean").toLowerCase();
 
 type ChecklistItemSeed = {
   label: string;
@@ -145,6 +146,23 @@ async function main() {
     admissionDate: new Date("2022-01-10")
   });
 
+  const adminUser = await upsertUser({
+    email: "admin@smartcheck.local",
+    password: "admin123",
+    role: UserRole.ADMIN,
+    employeeId: admin.id
+  });
+
+  await prisma.employee.update({ where: { id: admin.id }, data: { user: { connect: { id: adminUser.id } } } });
+
+  if (seedMode !== "demo") {
+    console.log("Seed limpa concluida com sucesso.");
+    console.log("Modo:", seedMode);
+    console.log("Login admin: admin@smartcheck.local / admin123");
+    console.log("Nenhum dado operacional foi criado.");
+    return;
+  }
+
   const manutencao = await upsertEmployee({
     name: "Carla Menezes",
     registration: "1101",
@@ -200,13 +218,6 @@ async function main() {
     admissionDate: new Date("2022-07-20")
   });
 
-  const adminUser = await upsertUser({
-    email: "admin@smartcheck.local",
-    password: "admin123",
-    role: UserRole.ADMIN,
-    employeeId: admin.id
-  });
-
   await upsertUser({
     email: "manutencao@smartcheck.local",
     password: "smart123",
@@ -234,8 +245,6 @@ async function main() {
     role: UserRole.ALMOXARIFADO,
     employeeId: almoxarife.id
   });
-
-  await prisma.employee.update({ where: { id: admin.id }, data: { user: { connect: { id: adminUser.id } } } });
 
   const equipments = [
     {
@@ -615,7 +624,7 @@ async function main() {
     }
   });
 
-  console.log("Seed concluída com sucesso.");
+  console.log("Seed demo concluida com sucesso.");
   console.log("Login admin: admin@smartcheck.local / admin123");
   console.log("Usuários de teste:");
   console.log("- manutencao@smartcheck.local / smart123 (MANUTENCAO)");

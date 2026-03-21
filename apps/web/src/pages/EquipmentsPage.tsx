@@ -88,6 +88,11 @@ export function EquipmentsPage() {
             <input className="input max-w-sm" placeholder="Buscar por nome, modelo, série" value={search} onChange={(event) => setSearch(event.target.value)} />
           </div>
           <div className="space-y-2">
+            {equipmentsQuery.data?.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+                Nenhum equipamento cadastrado ainda. Use o formulario ao lado para cadastrar maquina, caminhao, empilhadeira ou outro ativo.
+              </div>
+            )}
             {equipmentsQuery.data?.map((equipment) => (
               <div key={equipment.id} className="rounded-xl border border-slate-200 p-3 text-sm">
                 <div className="flex items-start justify-between gap-2">
