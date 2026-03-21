@@ -187,23 +187,39 @@ export async function maintenanceRoutes(app: FastifyInstance) {
   app.get("/history/equipment/:equipmentId", { preHandler: [app.authenticate] }, async (request) => {
     const params = z.object({ equipmentId: z.string().cuid() }).parse(request.params);
 
-    const [checklists, maintenances, plans] = await Promise.all([
+    const [checklists, maintenances, plans, equipment] = await Promise.all([
       prisma.checklistExecution.findMany({
         where: { equipmentId: params.equipmentId },
-        include: { template: true, employee: true },
+        include: {
+          template: true,
+          employee: true,
+          maintenances: true,
+          items: {
+            where: { hadProblem: true },
+            include: { templateItem: true, attachments: true }
+          }
+        },
         orderBy: { executedAt: "desc" }
       }),
       prisma.maintenance.findMany({
         where: { equipmentId: params.equipmentId },
-        include: { responsible: true },
+        include: { responsible: true, attachments: true },
         orderBy: { openedAt: "desc" }
       }),
       prisma.maintenancePlan.findMany({
         where: { equipmentId: params.equipmentId },
         orderBy: { createdAt: "desc" }
-      })
+      }),
+      prisma.equipment.findUnique({ where: { id: params.equipmentId } })
     ]);
 
-    return { checklists, maintenances, plans };
+    const planAlerts = equipment
+      ? plans.map((plan) => ({
+          plan,
+          alert: evaluatePlan(plan, equipment)
+        }))
+      : [];
+
+    return { checklists, maintenances, plans, planAlerts };
   });
 }

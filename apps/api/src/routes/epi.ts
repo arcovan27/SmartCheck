@@ -1,4 +1,4 @@
-﻿import type { FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { ConfirmationMethod, EpiMovementType } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
@@ -137,9 +137,17 @@ export async function epiRoutes(app: FastifyInstance) {
         notes: z.string().optional().nullable(),
         confirmationMethod: z.nativeEnum(ConfirmationMethod),
         confirmationBiometricId: z.string().optional().nullable(),
+        employeeSignatureName: z.string().min(2),
+        employeeConfirmedAt: z.coerce.date().optional().nullable(),
         attachmentIds: z.array(z.string().cuid()).optional()
       })
       .parse(request.body);
+
+    if (body.confirmationMethod === ConfirmationMethod.BIOMETRIA && !body.confirmationBiometricId) {
+      return reply
+        .code(400)
+        .send({ message: "confirmationBiometricId é obrigatório quando confirmação for por biometria" });
+    }
 
     const delivery = await prisma.$transaction(async (tx) => {
       const epi = await tx.epi.findUniqueOrThrow({ where: { id: body.epiId } });
@@ -166,6 +174,8 @@ export async function epiRoutes(app: FastifyInstance) {
           notes: body.notes,
           confirmationMethod: body.confirmationMethod,
           confirmationBiometricId: body.confirmationBiometricId,
+          employeeSignatureName: body.employeeSignatureName,
+          employeeConfirmedAt: body.employeeConfirmedAt ?? new Date(),
           attachments: body.attachmentIds
             ? { connect: body.attachmentIds.map((id) => ({ id })) }
             : undefined
@@ -188,7 +198,10 @@ export async function epiRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const params = z.object({ employeeId: z.string().cuid() }).parse(request.params);
 
-      const employee = await prisma.employee.findUnique({ where: { id: params.employeeId } });
+      const employee = await prisma.employee.findUnique({
+        where: { id: params.employeeId },
+        include: { biometric: true }
+      });
       if (!employee) {
         return reply.code(404).send({ message: "Funcionário não encontrado" });
       }

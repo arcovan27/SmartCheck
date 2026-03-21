@@ -29,7 +29,7 @@ export function EquipmentsPage() {
 
   const equipmentDetailsQuery = useQuery({
     queryKey: ["equipment-details", selectedId],
-    queryFn: () => apiRequest<any>(`/equipments/${selectedId}`),
+    queryFn: () => apiRequest<any>(`/history/equipment/${selectedId}`),
     enabled: Boolean(selectedId)
   });
 
@@ -145,7 +145,7 @@ export function EquipmentsPage() {
       </div>
 
       <section className="card">
-        <h2 className="section-title mb-2">Histórico resumido do equipamento</h2>
+        <h2 className="section-title mb-2">Histórico operacional do equipamento</h2>
         {!selectedId && <p className="text-sm text-slate-500">Selecione um equipamento para visualizar o histórico.</p>}
         {equipmentDetailsQuery.isLoading && <p>Carregando detalhes...</p>}
         {equipmentDetailsQuery.data && (
@@ -166,11 +166,28 @@ export function EquipmentsPage() {
             <div>
               <h3 className="mb-2 font-semibold">Últimos checklists</h3>
               <div className="space-y-2">
-                {equipmentDetailsQuery.data.checklistExecutions.map((execution: any) => (
+                {equipmentDetailsQuery.data.checklists.map((execution: any) => (
                   <div key={execution.id} className="rounded-xl border border-slate-200 p-3 text-sm">
                     <p className="font-semibold">{execution.template.name}</p>
                     <p>
                       {execution.hadProblem ? "Com problema" : "Sem problema"} • {new Date(execution.executedAt).toLocaleString("pt-BR")}
+                    </p>
+                    {execution.items?.length > 0 &&
+                      execution.items.map((item: any) => (
+                        <p key={item.id} className="text-xs text-slate-600">
+                          Falha: {item.templateItem.label} • fotos: {item.attachments.length}
+                        </p>
+                      ))}
+                  </div>
+                ))}
+              </div>
+              <h3 className="mb-2 mt-4 font-semibold">Próximas preventivas</h3>
+              <div className="space-y-2">
+                {equipmentDetailsQuery.data.planAlerts.map((planAlert: any) => (
+                  <div key={planAlert.plan.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <p className="font-semibold">{planAlert.plan.title}</p>
+                    <p>
+                      {planAlert.alert.state} • {Number(planAlert.alert.currentValue).toFixed(1)} / {Number(planAlert.alert.threshold).toFixed(1)}
                     </p>
                   </div>
                 ))}

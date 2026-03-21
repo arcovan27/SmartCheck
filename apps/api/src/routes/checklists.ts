@@ -1,8 +1,9 @@
-﻿import type { FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import {
   ChecklistItemType,
   ChecklistOptionResult,
   ChecklistPeriodicity,
+  ChecklistTemplateCode,
   MaintenancePriority,
   MaintenanceStatus,
   MaintenanceType
@@ -11,7 +12,7 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 
 const executionItemSchema = z.object({
-  templateItemId: z.string().cuid(),
+  templateItemId: z.string().min(1),
   optionResult: z.nativeEnum(ChecklistOptionResult).optional().nullable(),
   booleanResult: z.boolean().optional().nullable(),
   numericValue: z.number().optional().nullable(),
@@ -80,6 +81,7 @@ export async function checklistRoutes(app: FastifyInstance) {
     const body = z
       .object({
         name: z.string().min(2),
+        code: z.nativeEnum(ChecklistTemplateCode).optional(),
         description: z.string().optional().nullable(),
         periodicity: z.nativeEnum(ChecklistPeriodicity),
         equipmentId: z.string().cuid(),
@@ -88,12 +90,14 @@ export async function checklistRoutes(app: FastifyInstance) {
           .array(
             z.object({
               label: z.string().min(2),
+              section: z.string().optional().nullable(),
               instruction: z.string().optional().nullable(),
               itemType: z.nativeEnum(ChecklistItemType),
               position: z.number().int().nonnegative(),
               required: z.boolean().optional(),
               requiresObservationOnProblem: z.boolean().optional(),
               allowsPhotoOnProblem: z.boolean().optional(),
+              requiresPhotoOnProblem: z.boolean().optional(),
               opensMaintenanceOnProblem: z.boolean().optional()
             })
           )
@@ -104,6 +108,7 @@ export async function checklistRoutes(app: FastifyInstance) {
     const template = await prisma.checklistTemplate.create({
       data: {
         name: body.name,
+        code: body.code ?? ChecklistTemplateCode.OUTRO,
         description: body.description,
         periodicity: body.periodicity,
         equipmentId: body.equipmentId,
@@ -124,6 +129,7 @@ export async function checklistRoutes(app: FastifyInstance) {
     const body = z
       .object({
         name: z.string().min(2).optional(),
+        code: z.nativeEnum(ChecklistTemplateCode).optional(),
         description: z.string().optional().nullable(),
         periodicity: z.nativeEnum(ChecklistPeriodicity).optional(),
         isActive: z.boolean().optional(),
@@ -131,12 +137,14 @@ export async function checklistRoutes(app: FastifyInstance) {
           .array(
             z.object({
               label: z.string().min(2),
+              section: z.string().optional().nullable(),
               instruction: z.string().optional().nullable(),
               itemType: z.nativeEnum(ChecklistItemType),
               position: z.number().int().nonnegative(),
               required: z.boolean().optional(),
               requiresObservationOnProblem: z.boolean().optional(),
               allowsPhotoOnProblem: z.boolean().optional(),
+              requiresPhotoOnProblem: z.boolean().optional(),
               opensMaintenanceOnProblem: z.boolean().optional()
             })
           )
@@ -153,6 +161,7 @@ export async function checklistRoutes(app: FastifyInstance) {
         where: { id: params.id },
         data: {
           name: body.name,
+          code: body.code,
           description: body.description,
           periodicity: body.periodicity,
           isActive: body.isActive,
@@ -206,9 +215,16 @@ export async function checklistRoutes(app: FastifyInstance) {
   app.post("/checklist-executions", { preHandler: [app.authenticate] }, async (request, reply) => {
     const body = z
       .object({
-        templateId: z.string().cuid(),
+        templateId: z.string().min(1),
         equipmentId: z.string().cuid(),
         employeeId: z.string().cuid(),
+        monthReference: z.string().optional().nullable(),
+        operatorName: z.string().optional().nullable(),
+        secondaryOperatorName: z.string().optional().nullable(),
+        hourmeterValue: z.number().optional().nullable(),
+        mileageValue: z.number().optional().nullable(),
+        workingHoursStartMonth: z.number().optional().nullable(),
+        fuelLevel: z.string().optional().nullable(),
         notes: z.string().optional().nullable(),
         items: z.array(executionItemSchema).min(1)
       })
@@ -242,7 +258,10 @@ export async function checklistRoutes(app: FastifyInstance) {
             .send({ message: `Observação obrigatória para problema no item "${templateItem.label}"` });
         }
 
-        if (templateItem.allowsPhotoOnProblem && (!inputItem.attachmentIds || inputItem.attachmentIds.length === 0)) {
+        if (
+          templateItem.requiresPhotoOnProblem &&
+          (!inputItem.attachmentIds || inputItem.attachmentIds.length === 0)
+        ) {
           return reply
             .code(400)
             .send({ message: `Foto obrigatória para problema no item "${templateItem.label}"` });
@@ -261,6 +280,13 @@ export async function checklistRoutes(app: FastifyInstance) {
           templateId: body.templateId,
           equipmentId: body.equipmentId,
           employeeId: body.employeeId,
+          monthReference: body.monthReference,
+          operatorName: body.operatorName,
+          secondaryOperatorName: body.secondaryOperatorName,
+          hourmeterValue: body.hourmeterValue,
+          mileageValue: body.mileageValue,
+          workingHoursStartMonth: body.workingHoursStartMonth,
+          fuelLevel: body.fuelLevel,
           notes: body.notes,
           hadProblem
         }

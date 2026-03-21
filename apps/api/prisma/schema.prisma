@@ -39,6 +39,15 @@ enum ChecklistPeriodicity {
   MENSAL
 }
 
+enum ChecklistTemplateCode {
+  PRENSA_TUBOS_MANUAL_01
+  PRENSA_TUBOS_MANUAL_02
+  MISTURADOR_MASSA_TUBOS
+  PA_CARREGADEIRA
+  EMPILHADEIRA_SEMANAL
+  OUTRO
+}
+
 enum ChecklistItemType {
   OK_PROBLEMA_NA
   SIM_NAO
@@ -48,6 +57,7 @@ enum ChecklistItemType {
 
 enum ChecklistOptionResult {
   OK
+  SEM_USO
   PROBLEMA
   NA
 }
@@ -101,6 +111,8 @@ model Employee {
   position     String
   phone        String?
   email        String?
+  admissionDate DateTime?
+  dismissalDate DateTime?
   isActive     Boolean            @default(true)
   notes        String?
   user         User?
@@ -175,6 +187,8 @@ model EpiDelivery {
   notes                       String?
   confirmationMethod          ConfirmationMethod  @default(LOGIN)
   confirmationBiometricId     String?
+  employeeSignatureName       String?
+  employeeConfirmedAt         DateTime?
 
   attachments                 Attachment[]
 
@@ -209,6 +223,7 @@ model Equipment {
 
 model ChecklistTemplate {
   id            String               @id @default(cuid())
+  code          ChecklistTemplateCode @default(OUTRO)
   name          String
   description   String?
   periodicity   ChecklistPeriodicity
@@ -228,12 +243,14 @@ model ChecklistTemplateItem {
   templateId                  String
   template                    ChecklistTemplate  @relation(fields: [templateId], references: [id])
   label                       String
+  section                     String?
   instruction                 String?
   itemType                    ChecklistItemType
   position                    Int
   required                    Boolean            @default(true)
   requiresObservationOnProblem Boolean           @default(true)
   allowsPhotoOnProblem        Boolean            @default(true)
+  requiresPhotoOnProblem      Boolean            @default(false)
   opensMaintenanceOnProblem   Boolean            @default(true)
 
   executionItems ChecklistExecutionItem[]
@@ -251,6 +268,13 @@ model ChecklistExecution {
   employeeId  String
   employee    Employee           @relation(fields: [employeeId], references: [id])
   executedAt  DateTime           @default(now())
+  monthReference String?
+  operatorName String?
+  secondaryOperatorName String?
+  hourmeterValue Float?
+  mileageValue Float?
+  workingHoursStartMonth Float?
+  fuelLevel String?
   notes       String?
   hadProblem  Boolean            @default(false)
 

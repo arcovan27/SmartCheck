@@ -1,6 +1,6 @@
-﻿import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import type { FastifyInstance } from "fastify";
 import { BiometricStatus } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "../prisma.js";
 
 export async function employeeRoutes(app: FastifyInstance) {
@@ -48,7 +48,17 @@ export async function employeeRoutes(app: FastifyInstance) {
         epiMovements: {
           include: { epi: true, responsibleUser: true },
           orderBy: { date: "desc" },
-          take: 20
+          take: 30
+        },
+        checklistExecutions: {
+          include: { equipment: true, template: true },
+          orderBy: { executedAt: "desc" },
+          take: 30
+        },
+        maintenances: {
+          include: { equipment: true, checklistExecution: true },
+          orderBy: { openedAt: "desc" },
+          take: 30
         }
       }
     });
@@ -57,9 +67,24 @@ export async function employeeRoutes(app: FastifyInstance) {
       return reply.code(404).send({ message: "Funcionário não encontrado" });
     }
 
+    const relatedChecklistMaintenances = await prisma.maintenance.findMany({
+      where: {
+        checklistExecution: {
+          employeeId: employee.id
+        }
+      },
+      include: {
+        equipment: true,
+        checklistExecution: true
+      },
+      orderBy: { openedAt: "desc" },
+      take: 30
+    });
+
     return {
       ...employee,
-      biometricStatus: employee.biometric?.status ?? BiometricStatus.SEM_BIOMETRIA
+      biometricStatus: employee.biometric?.status ?? BiometricStatus.SEM_BIOMETRIA,
+      relatedChecklistMaintenances
     };
   });
 
@@ -73,6 +98,8 @@ export async function employeeRoutes(app: FastifyInstance) {
         position: z.string().min(1),
         phone: z.string().optional().nullable(),
         email: z.string().email().optional().nullable(),
+        admissionDate: z.coerce.date().optional().nullable(),
+        dismissalDate: z.coerce.date().optional().nullable(),
         isActive: z.boolean().optional(),
         notes: z.string().optional().nullable(),
         userId: z.string().cuid().optional().nullable()
@@ -88,6 +115,8 @@ export async function employeeRoutes(app: FastifyInstance) {
         position: body.position,
         phone: body.phone,
         email: body.email,
+        admissionDate: body.admissionDate,
+        dismissalDate: body.dismissalDate,
         isActive: body.isActive ?? true,
         notes: body.notes,
         user: body.userId ? { connect: { id: body.userId } } : undefined
@@ -109,6 +138,8 @@ export async function employeeRoutes(app: FastifyInstance) {
         position: z.string().min(1).optional(),
         phone: z.string().optional().nullable(),
         email: z.string().email().optional().nullable(),
+        admissionDate: z.coerce.date().optional().nullable(),
+        dismissalDate: z.coerce.date().optional().nullable(),
         isActive: z.boolean().optional(),
         notes: z.string().optional().nullable(),
         userId: z.string().cuid().optional().nullable()
@@ -125,9 +156,16 @@ export async function employeeRoutes(app: FastifyInstance) {
         position: body.position,
         phone: body.phone,
         email: body.email,
+        admissionDate: body.admissionDate,
+        dismissalDate: body.dismissalDate,
         isActive: body.isActive,
         notes: body.notes,
-        user: body.userId === undefined ? undefined : body.userId ? { connect: { id: body.userId } } : { disconnect: true }
+        user:
+          body.userId === undefined
+            ? undefined
+            : body.userId
+              ? { connect: { id: body.userId } }
+              : { disconnect: true }
       },
       include: { user: true, biometric: true }
     });
