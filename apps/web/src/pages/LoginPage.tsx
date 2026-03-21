@@ -26,12 +26,15 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-[radial-gradient(circle_at_top,_#1e293b,_#020617)] p-4">
-      <form className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/70 p-6 shadow-2xl backdrop-blur" onSubmit={onSubmit}>
+    <div className="grid min-h-screen place-items-center bg-[linear-gradient(135deg,#082f49_0%,#0f172a_45%,#020617_100%)] p-4">
+      <form
+        className="w-full max-w-md rounded-[28px] border border-slate-700 bg-slate-950/85 p-7 shadow-[0_30px_80px_rgba(0,0,0,0.45)] backdrop-blur"
+        onSubmit={onSubmit}
+      >
         <div className="mb-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-brand-300">SmartCheck</p>
-          <h1 className="text-3xl font-extrabold text-white">Gestão operacional industrial</h1>
-          <p className="mt-1 text-sm text-slate-300">Acesse com seu usuário para continuar.</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">SmartCheck</p>
+          <h1 className="mt-2 text-3xl font-extrabold text-white">Operação Industrial</h1>
+          <p className="mt-2 text-sm text-slate-300">Acesso inicial do sistema com usuário administrador.</p>
         </div>
 
         <div className="space-y-3">
@@ -46,6 +49,12 @@ export function LoginPage() {
         </div>
 
         {error && <p className="mt-3 rounded-xl bg-red-100 p-2 text-sm text-red-700">{error}</p>}
+
+        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-3 text-sm text-slate-300">
+          <p className="font-semibold text-white">Usuário inicial</p>
+          <p>Login: admin@smartcheck.local</p>
+          <p>Senha: admin123</p>
+        </div>
 
         <button className="btn-primary mt-4 w-full" disabled={loading}>
           {loading ? "Entrando..." : "Entrar"}

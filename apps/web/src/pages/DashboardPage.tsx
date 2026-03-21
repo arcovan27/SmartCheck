@@ -1,6 +1,5 @@
-﻿import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "../lib/api";
-import { maintenancePriorityLabels, maintenanceStatusLabels } from "../lib/constants";
 
 type DashboardResponse = {
   cards: {
@@ -11,9 +10,6 @@ type DashboardResponse = {
     pendingChecklists: number;
     duePreventiveAlerts: number;
   };
-  recentMaintenances: Array<any>;
-  recentChecklistProblems: Array<any>;
-  recentEpiDeliveries: Array<any>;
 };
 
 export function DashboardPage() {
@@ -30,84 +26,45 @@ export function DashboardPage() {
     return <div className="card text-red-700">Falha ao carregar o dashboard.</div>;
   }
 
-  const { cards, recentMaintenances, recentChecklistProblems, recentEpiDeliveries } = summaryQuery.data;
+  const { cards } = summaryQuery.data;
+
+  const cardItems = [
+    { label: "Funcionários Ativos", value: cards.activeEmployees, tone: "text-cyan-700" },
+    { label: "EPIs Cadastradas", value: cards.totalEpis, tone: "text-cyan-700" },
+    { label: "Equipamentos Ativos", value: cards.activeEquipments, tone: "text-cyan-700" },
+    { label: "Manutenções em Aberto", value: cards.openMaintenances, tone: "text-red-700" },
+    { label: "Checklists Pendentes", value: cards.pendingChecklists, tone: "text-amber-700" },
+    { label: "Alertas Preventivos", value: cards.duePreventiveAlerts, tone: "text-orange-700" }
+  ];
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <div className="card">
-          <p className="text-sm text-slate-500">Funcionários ativos</p>
-          <p className="kpi-value text-brand-700">{cards.activeEmployees}</p>
-        </div>
-        <div className="card">
-          <p className="text-sm text-slate-500">EPIs cadastrados</p>
-          <p className="kpi-value text-brand-700">{cards.totalEpis}</p>
-        </div>
-        <div className="card">
-          <p className="text-sm text-slate-500">Equipamentos ativos</p>
-          <p className="kpi-value text-brand-700">{cards.activeEquipments}</p>
-        </div>
-        <div className="card">
-          <p className="text-sm text-slate-500">Manutenções em aberto</p>
-          <p className="kpi-value text-red-700">{cards.openMaintenances}</p>
-        </div>
-        <div className="card">
-          <p className="text-sm text-slate-500">Checklists pendentes</p>
-          <p className="kpi-value text-amber-700">{cards.pendingChecklists}</p>
-        </div>
-        <div className="card">
-          <p className="text-sm text-slate-500">Alertas preventivos</p>
-          <p className="kpi-value text-orange-700">{cards.duePreventiveAlerts}</p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <section className="rounded-[28px] bg-slate-950 px-6 py-7 text-white shadow-[0_30px_60px_rgba(15,23,42,0.25)]">
+        <p className="text-sm uppercase tracking-[0.2em] text-cyan-300">Dashboard</p>
+        <h2 className="mt-2 text-3xl font-extrabold">Painel inicial da operação</h2>
+        <p className="mt-2 max-w-2xl text-sm text-slate-300">
+          Essa é a estrutura base do SmartCheck. Por enquanto o sistema começa com o administrador e os módulos principais de cadastro e acompanhamento operacional.
+        </p>
+      </section>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <section className="card">
-          <h2 className="section-title mb-3">Últimas manutenções</h2>
-          <div className="space-y-2">
-            {recentMaintenances.length === 0 && <p className="text-sm text-slate-500">Nenhuma manutenção registrada.</p>}
-            {recentMaintenances.map((item) => (
-              <div key={item.id} className="rounded-xl border border-slate-200 p-3 text-sm">
-                <p className="font-semibold">{item.equipment.name}</p>
-                <p>{item.description}</p>
-                <p className="text-slate-500">
-                  {maintenanceStatusLabels[item.status] ?? item.status} • {maintenancePriorityLabels[item.priority] ?? item.priority}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
+      <section className="space-y-3">
+        <div>
+          <h3 className="section-title">Cards</h3>
+          <p className="text-sm text-slate-500">Resumo geral da operação industrial.</p>
+        </div>
 
-        <section className="card">
-          <h2 className="section-title mb-3">Últimos checklists com problema</h2>
-          <div className="space-y-2">
-            {recentChecklistProblems.length === 0 && <p className="text-sm text-slate-500">Sem problemas recentes.</p>}
-            {recentChecklistProblems.map((item) => (
-              <div key={item.id} className="rounded-xl border border-slate-200 p-3 text-sm">
-                <p className="font-semibold">{item.equipment.name}</p>
-                <p>{item.template.name}</p>
-                <p className="text-slate-500">Operador: {item.employee.name}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="card">
-          <h2 className="section-title mb-3">Últimos EPIs entregues</h2>
-          <div className="space-y-2">
-            {recentEpiDeliveries.length === 0 && <p className="text-sm text-slate-500">Sem movimentações recentes.</p>}
-            {recentEpiDeliveries.map((item) => (
-              <div key={item.id} className="rounded-xl border border-slate-200 p-3 text-sm">
-                <p className="font-semibold">
-                  {item.employee.name} • {item.epi.name}
-                </p>
-                <p>Quantidade: {item.quantity}</p>
-                <p className="text-slate-500">{new Date(item.date).toLocaleString("pt-BR")}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {cardItems.map((item) => (
+            <div
+              key={item.label}
+              className="card rounded-[24px] border-slate-200 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)]"
+            >
+              <p className="text-sm font-medium text-slate-500">{item.label}</p>
+              <p className={`mt-3 text-4xl font-extrabold tracking-tight ${item.tone}`}>{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

@@ -135,6 +135,11 @@ async function main() {
   await prisma.checklistTemplateItem.deleteMany();
   await prisma.checklistTemplate.deleteMany();
   await prisma.epiDelivery.deleteMany();
+  await prisma.employeeBiometric.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.epi.deleteMany();
+  await prisma.equipment.deleteMany();
+  await prisma.employee.deleteMany();
 
   const admin = await upsertEmployee({
     name: "Administrador SmartCheck",

@@ -14,6 +14,10 @@ body {
     radial-gradient(circle at bottom left, rgba(148, 163, 184, 0.15), transparent 50%);
 }
 
+#root {
+  min-height: 100vh;
+}
+
 .btn {
   @apply rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150;
 }
