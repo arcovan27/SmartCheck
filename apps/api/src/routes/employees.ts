@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { BiometricStatus } from "@prisma/client";
+import { BiometricStatus, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 
@@ -203,21 +203,43 @@ export async function employeeRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Inative o funcionário antes de excluir" });
     }
 
+    const blockingReasons: string[] = [];
+
     if (employee.user) {
-      return reply.code(400).send({ message: "Este funcionário possui usuário vinculado e não pode ser excluído" });
+      blockingReasons.push("possui usuário vinculado");
     }
 
     if (employee.epiMovements.length || employee.checklistExecutions.length || employee.maintenances.length) {
-      return reply
-        .code(400)
-        .send({ message: "Este funcionário possui histórico operacional e não pode ser excluído" });
+      blockingReasons.push("possui histórico operacional");
     }
 
-    if (employee.biometric) {
-      await prisma.employeeBiometric.delete({ where: { employeeId: employee.id } });
+    if (blockingReasons.length > 0) {
+      return reply.code(400).send({
+        message: `Não foi possível excluir: ${blockingReasons.join(" e ")}.`,
+        details: {
+          hasUser: Boolean(employee.user),
+          epiMovements: employee.epiMovements.length,
+          checklistExecutions: employee.checklistExecutions.length,
+          maintenances: employee.maintenances.length
+        }
+      });
     }
 
-    await prisma.employee.delete({ where: { id: employee.id } });
+    try {
+      if (employee.biometric) {
+        await prisma.employeeBiometric.delete({ where: { employeeId: employee.id } });
+      }
+
+      await prisma.employee.delete({ where: { id: employee.id } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+        return reply.code(400).send({
+          message: "Não foi possível excluir porque este funcionário ainda possui vínculos com outros registros."
+        });
+      }
+
+      throw error;
+    }
 
     return { message: "Funcionário excluído com sucesso" };
   });

@@ -46,6 +46,7 @@ export function EmployeesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [biometricExternalId, setBiometricExternalId] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
 
   const employeesQuery = useQuery({
     queryKey: ["employees", filters],
@@ -77,6 +78,7 @@ export function EmployeesPage() {
       return apiRequest("/employees", { method: "POST", body: JSON.stringify(payload) });
     },
     onSuccess: () => {
+      setActionMessage("");
       queryClient.invalidateQueries({ queryKey: ["employees"] });
       if (selectedId) queryClient.invalidateQueries({ queryKey: ["employee-details", selectedId] });
       setForm(emptyForm);
@@ -91,6 +93,7 @@ export function EmployeesPage() {
         body: JSON.stringify({ isActive: payload.isActive })
       }),
     onSuccess: async (_, payload) => {
+      setActionMessage("");
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       if (selectedId === payload.id) {
         setForm((prev) => ({ ...prev, isActive: payload.isActive }));
@@ -105,6 +108,7 @@ export function EmployeesPage() {
         method: "DELETE"
       }),
     onSuccess: async (_, employeeId) => {
+      setActionMessage("Funcionário excluído com sucesso.");
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       if (selectedId === employeeId) {
         setSelectedId(null);
@@ -151,6 +155,7 @@ export function EmployeesPage() {
   });
 
   function loadEmployee(employee: Employee) {
+    setActionMessage("");
     setSelectedId(employee.id);
     setForm({
       name: employee.name,
@@ -166,6 +171,7 @@ export function EmployeesPage() {
   }
 
   function clearForm() {
+    setActionMessage("");
     setSelectedId(null);
     setForm(emptyForm);
   }
@@ -213,6 +219,22 @@ export function EmployeesPage() {
         {employeesQuery.data?.length === 0 && (
           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
             Nenhum funcionario cadastrado ainda. Use o formulario ao lado para criar o primeiro cadastro.
+          </div>
+        )}
+
+        {(actionMessage || statusMutation.isError || deleteMutation.isError) && (
+          <div
+            className={`rounded-xl p-3 text-sm ${
+              statusMutation.isError || deleteMutation.isError
+                ? "bg-red-50 text-red-700"
+                : "bg-emerald-50 text-emerald-700"
+            }`}
+          >
+            {deleteMutation.isError
+              ? (deleteMutation.error as Error).message
+              : statusMutation.isError
+                ? (statusMutation.error as Error).message
+                : actionMessage}
           </div>
         )}
 
