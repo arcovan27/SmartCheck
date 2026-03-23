@@ -1,6 +1,6 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "../lib/api";
+import { apiRequest, getUploadedFileUrl, uploadFile } from "../lib/api";
 
 type Employee = {
   id: string;
@@ -11,6 +11,7 @@ type Employee = {
   position: string;
   phone?: string | null;
   email?: string | null;
+  photoPath?: string | null;
   isActive: boolean;
   notes?: string | null;
   user?: { id: string; email: string } | null;
@@ -30,6 +31,7 @@ const emptyForm = {
   position: "",
   phone: "",
   email: "",
+  photoPath: "",
   notes: "",
   isActive: true
 };
@@ -45,8 +47,22 @@ export function EmployeesPage() {
   const [filters, setFilters] = useState({ name: "", registration: "", department: "" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [biometricExternalId, setBiometricExternalId] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+
+  useEffect(() => {
+    if (!photoFile) {
+      setPhotoPreviewUrl(null);
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(photoFile);
+    setPhotoPreviewUrl(previewUrl);
+
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [photoFile]);
 
   const employeesQuery = useQuery({
     queryKey: ["employees", filters],
@@ -71,17 +87,38 @@ export function EmployeesPage() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (payload: any) => {
-      if (selectedEmployee) {
-        return apiRequest(`/employees/${selectedEmployee.id}`, { method: "PATCH", body: JSON.stringify(payload) });
+    mutationFn: async (payload: any) => {
+      let photoPath = payload.photoPath;
+
+      if (photoFile) {
+        const uploadedPhoto = await uploadFile(photoFile);
+        photoPath = uploadedPhoto.path;
       }
-      return apiRequest("/employees", { method: "POST", body: JSON.stringify(payload) });
+
+      const payloadWithPhoto = {
+        ...payload,
+        photoPath: photoPath || null
+      };
+
+      if (selectedEmployee) {
+        return apiRequest(`/employees/${selectedEmployee.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payloadWithPhoto)
+        });
+      }
+
+      return apiRequest("/employees", {
+        method: "POST",
+        body: JSON.stringify(payloadWithPhoto)
+      });
     },
     onSuccess: () => {
       setActionMessage("");
       queryClient.invalidateQueries({ queryKey: ["employees"] });
       if (selectedId) queryClient.invalidateQueries({ queryKey: ["employee-details", selectedId] });
       setForm(emptyForm);
+      setPhotoFile(null);
+      setPhotoPreviewUrl(null);
       setSelectedId(null);
     }
   });
@@ -108,11 +145,13 @@ export function EmployeesPage() {
         method: "DELETE"
       }),
     onSuccess: async (_, employeeId) => {
-      setActionMessage("Funcionário excluído com sucesso.");
+      setActionMessage("Funcionario excluido com sucesso.");
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       if (selectedId === employeeId) {
         setSelectedId(null);
         setForm(emptyForm);
+        setPhotoFile(null);
+        setPhotoPreviewUrl(null);
       }
     }
   });
@@ -165,15 +204,20 @@ export function EmployeesPage() {
       position: employee.position,
       phone: employee.phone ?? "",
       email: employee.email ?? "",
+      photoPath: employee.photoPath ?? "",
       notes: employee.notes ?? "",
       isActive: employee.isActive
     });
+    setPhotoFile(null);
+    setPhotoPreviewUrl(null);
   }
 
   function clearForm() {
     setActionMessage("");
     setSelectedId(null);
     setForm(emptyForm);
+    setPhotoFile(null);
+    setPhotoPreviewUrl(null);
   }
 
   function submit(event: FormEvent) {
@@ -183,16 +227,19 @@ export function EmployeesPage() {
       cpf: form.cpf || null,
       phone: form.phone || null,
       email: form.email || null,
+      photoPath: form.photoPath || null,
       notes: form.notes || null
     });
   }
+
+  const employeePhotoUrl = photoPreviewUrl ?? getUploadedFileUrl(form.photoPath);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[1.1fr,1fr]">
       <section className="card space-y-4">
         <div>
-          <h2 className="section-title">Funcionários e vínculos operacionais</h2>
-          <p className="text-sm text-slate-500">Gestão completa com histórico de EPI, checklist e manutenção.</p>
+          <h2 className="section-title">Funcionarios e vinculos operacionais</h2>
+          <p className="text-sm text-slate-500">Gestao completa com historico de EPI, checklist e manutencao.</p>
         </div>
 
         <div className="grid gap-2 sm:grid-cols-3">
@@ -204,7 +251,7 @@ export function EmployeesPage() {
           />
           <input
             className="input"
-            placeholder="Matrícula"
+            placeholder="Matricula"
             value={filters.registration}
             onChange={(event) => setFilters((prev) => ({ ...prev, registration: event.target.value }))}
           />
@@ -249,9 +296,18 @@ export function EmployeesPage() {
                   </p>
                   <p className="text-slate-500">{biometricStatusLabel(employee.biometric?.status)}</p>
                 </div>
-                <span className={employee.isActive ? "badge-success" : "badge-neutral"}>
-                  {employee.isActive ? "Ativo" : "Inativo"}
-                </span>
+                <div className="flex items-start gap-2">
+                  {employee.photoPath ? (
+                    <img
+                      src={getUploadedFileUrl(employee.photoPath) ?? ""}
+                      alt={`Foto de ${employee.name}`}
+                      className="h-16 w-12 rounded-md border border-slate-200 object-cover"
+                    />
+                  ) : null}
+                  <span className={employee.isActive ? "badge-success" : "badge-neutral"}>
+                    {employee.isActive ? "Ativo" : "Inativo"}
+                  </span>
+                </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" className="btn-secondary" onClick={() => loadEmployee(employee)}>
@@ -269,7 +325,7 @@ export function EmployeesPage() {
                     type="button"
                     className="btn-danger"
                     onClick={() => {
-                      if (window.confirm(`Excluir o funcionário ${employee.name}?`)) {
+                      if (window.confirm(`Excluir o funcionario ${employee.name}?`)) {
                         deleteMutation.mutate(employee.id);
                       }
                     }}
@@ -285,7 +341,7 @@ export function EmployeesPage() {
 
       <section className="card space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="section-title">{selectedEmployee ? "Ficha do funcionário" : "Novo funcionário"}</h2>
+          <h2 className="section-title">{selectedEmployee ? "Ficha do funcionario" : "Novo funcionario"}</h2>
           {selectedEmployee && (
             <button className="btn-secondary" onClick={clearForm}>
               Novo cadastro
@@ -304,7 +360,7 @@ export function EmployeesPage() {
           <div className="grid gap-2 sm:grid-cols-2">
             <input
               className="input"
-              placeholder="Matrícula"
+              placeholder="Matricula"
               value={form.registration}
               onChange={(event) => setForm({ ...form, registration: event.target.value })}
               required
@@ -326,7 +382,7 @@ export function EmployeesPage() {
             />
             <input
               className="input"
-              placeholder="Função/cargo"
+              placeholder="Funcao/cargo"
               value={form.position}
               onChange={(event) => setForm({ ...form, position: event.target.value })}
               required
@@ -349,10 +405,46 @@ export function EmployeesPage() {
           <textarea
             className="textarea"
             rows={2}
-            placeholder="Observações"
+            placeholder="Observacoes"
             value={form.notes}
             onChange={(event) => setForm({ ...form, notes: event.target.value })}
           />
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="mb-2 text-sm font-medium text-slate-700">Foto 3x4 (opcional)</p>
+            <div className="flex items-start gap-3">
+              <div className="flex h-32 w-24 items-center justify-center rounded-md border border-dashed border-slate-300 bg-white">
+                {employeePhotoUrl ? (
+                  <img
+                    src={employeePhotoUrl}
+                    alt="Preview da foto do funcionario"
+                    className="h-32 w-24 rounded-md object-cover"
+                  />
+                ) : (
+                  <span className="px-2 text-center text-xs text-slate-500">Sem foto</span>
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <input
+                  className="input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                />
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setPhotoFile(null);
+                    setPhotoPreviewUrl(null);
+                    setForm((prev) => ({ ...prev, photoPath: "" }));
+                  }}
+                >
+                  Remover foto
+                </button>
+              </div>
+            </div>
+          </div>
 
           <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
             <input
@@ -360,21 +452,21 @@ export function EmployeesPage() {
               checked={form.isActive}
               onChange={(event) => setForm({ ...form, isActive: event.target.checked })}
             />
-            Funcionário ativo
+            Funcionario ativo
           </label>
 
           <button className="btn-primary w-full" disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? "Salvando..." : selectedEmployee ? "Salvar alterações" : "Cadastrar funcionário"}
+            {saveMutation.isPending ? "Salvando..." : selectedEmployee ? "Salvar alteracoes" : "Cadastrar funcionario"}
           </button>
         </form>
 
         {selectedEmployee && (
           <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <h3 className="font-semibold">Biometria U.are.U 4500 (integração via agente local)</h3>
+            <h3 className="font-semibold">Biometria U.are.U 4500 (integracao via agente local)</h3>
             <p className="text-sm text-slate-600">Status: {biometricStatusLabel(selectedEmployee.biometric?.status)}</p>
             <div className="grid gap-2">
-              <button className="btn-secondary" onClick={() => startBiometric.mutate(selectedEmployee.id)}>
-                Iniciar vínculo biométrico
+              <button type="button" className="btn-secondary" onClick={() => startBiometric.mutate(selectedEmployee.id)}>
+                Iniciar vinculo biometrico
               </button>
               <input
                 className="input"
@@ -383,13 +475,14 @@ export function EmployeesPage() {
                 onChange={(event) => setBiometricExternalId(event.target.value)}
               />
               <button
+                type="button"
                 className="btn-primary"
                 onClick={() => finishBiometric.mutate(selectedEmployee.id)}
                 disabled={!biometricExternalId || finishBiometric.isPending}
               >
                 Confirmar biometria vinculada
               </button>
-              <button className="btn-danger" onClick={() => deleteBiometric.mutate(selectedEmployee.id)}>
+              <button type="button" className="btn-danger" onClick={() => deleteBiometric.mutate(selectedEmployee.id)}>
                 Remover biometria
               </button>
             </div>
@@ -398,10 +491,10 @@ export function EmployeesPage() {
 
         {employeeDetailsQuery.data && (
           <div className="space-y-2 rounded-xl border border-slate-200 p-3">
-            <h3 className="font-semibold">Histórico operacional do funcionário</h3>
+            <h3 className="font-semibold">Historico operacional do funcionario</h3>
             <p className="text-sm text-slate-600">
               EPIs: {employeeDetailsQuery.data.epiMovements.length} | Checklists executados:{" "}
-              {employeeDetailsQuery.data.checklistExecutions.length} | Ocorrências/manutenções relacionadas:{" "}
+              {employeeDetailsQuery.data.checklistExecutions.length} | Ocorrencias/manutencoes relacionadas:{" "}
               {employeeDetailsQuery.data.relatedChecklistMaintenances.length}
             </p>
             <div className="space-y-2">

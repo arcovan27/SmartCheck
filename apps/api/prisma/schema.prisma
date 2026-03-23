@@ -111,6 +111,7 @@ model Employee {
   position     String
   phone        String?
   email        String?
+  photoPath    String?
   admissionDate DateTime?
   dismissalDate DateTime?
   isActive     Boolean            @default(true)

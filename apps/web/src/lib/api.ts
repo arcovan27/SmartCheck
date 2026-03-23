@@ -45,3 +45,10 @@ export async function uploadFile(file: File): Promise<{ id: string; path: string
 
   return response.json();
 }
+
+export function getUploadedFileUrl(storedPath?: string | null): string | null {
+  if (!storedPath) return null;
+  const normalizedPath = storedPath.replace(/\\/g, "/").replace(/^\/+/, "");
+  const pathWithoutRoot = normalizedPath.replace(/^[^/]+\//, "");
+  return getApiUrl(`/files/${pathWithoutRoot}`);
+}
