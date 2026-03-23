@@ -6,6 +6,8 @@
     "dev": "dotnet run --project windows-agent/SmartCheck.BiometricAgent/SmartCheck.BiometricAgent.csproj",
     "start": "dotnet run --project windows-agent/SmartCheck.BiometricAgent/SmartCheck.BiometricAgent.csproj",
     "build": "dotnet build windows-agent/SmartCheck.BiometricAgent/SmartCheck.BiometricAgent.csproj",
+    "publish:win": "powershell -ExecutionPolicy Bypass -File ./scripts/build-installer.ps1 -NoInstaller",
+    "installer": "powershell -ExecutionPolicy Bypass -File ./scripts/build-installer.ps1",
     "dev:legacy-node": "node src/server.mjs"
   }
 }

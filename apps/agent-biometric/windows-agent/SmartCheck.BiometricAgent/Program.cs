@@ -254,7 +254,8 @@ sealed class UareuFingerprintService : IFingerprintService
 
         if (_assembly is not null)
         {
-            _logger.LogInformation("SDK U.are.U carregado via {Location}", _assembly.Location);
+            var sdkLocation = string.IsNullOrWhiteSpace(_sdkDir) ? "diretorio padrao do agente" : _sdkDir;
+            _logger.LogInformation("SDK U.are.U carregado. Origem configurada: {SdkLocation}", sdkLocation);
         }
     }
 

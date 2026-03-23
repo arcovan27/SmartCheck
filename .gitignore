@@ -12,3 +12,4 @@ extract-docs.js
 **/bin
 **/obj
 apps/agent-biometric/windows-agent/SmartCheck.BiometricAgent/data/templates.json
+apps/agent-biometric/dist

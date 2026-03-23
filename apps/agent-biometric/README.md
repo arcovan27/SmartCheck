@@ -16,6 +16,27 @@ Padrao de execucao local:
 - Host: `127.0.0.1`
 - Porta: `4100`
 
+## Gerar instalador (Inno Setup)
+Requisitos:
+- .NET 8 SDK
+- Inno Setup 6 (com `ISCC.exe` no PATH ou instalado em `C:\Program Files (x86)\Inno Setup 6`)
+
+Comando unico para gerar instalador:
+
+```powershell
+npm run installer -w @smartcheck/agent-biometric
+```
+
+Saidas geradas:
+- Publicacao Windows: `apps/agent-biometric/dist/win-x64`
+- Instalador `.exe`: `apps/agent-biometric/dist/installer`
+
+Se quiser apenas publicar sem empacotar:
+
+```powershell
+npm run publish:win -w @smartcheck/agent-biometric
+```
+
 ## Configurar SDK U.are.U
 1. Instale driver e SDK da DigitalPersona/HID no Windows.
 2. Garanta acesso ao arquivo `DPUruNet.dll`.
