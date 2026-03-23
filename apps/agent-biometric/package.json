@@ -1,0 +1,10 @@
+{
+  "name": "@smartcheck/agent-biometric",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/server.mjs",
+    "start": "node src/server.mjs"
+  }
+}

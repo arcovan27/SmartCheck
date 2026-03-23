@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, getUploadedFileUrl, uploadFile } from "../lib/api";
+import { API_URL, apiRequest, getUploadedFileUrl, uploadFile } from "../lib/api";
 
 type Employee = {
   id: string;
@@ -44,6 +44,7 @@ function biometricStatusLabel(status?: string) {
 
 export function EmployeesPage() {
   const queryClient = useQueryClient();
+  const biometricAgentUrl = import.meta.env.VITE_BIOMETRIC_AGENT_URL ?? "http://127.0.0.1:4100";
   const [filters, setFilters] = useState({ name: "", registration: "", department: "" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -193,6 +194,41 @@ export function EmployeesPage() {
     }
   });
 
+  const enrollWithAgent = useMutation({
+    mutationFn: async (employeeId: string) => {
+      const token = localStorage.getItem("smartcheck.token");
+      if (!token) {
+        throw new Error("Sessao expirada. Faca login novamente.");
+      }
+
+      const response = await fetch(`${biometricAgentUrl}/enroll`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId,
+          provider: "UAREU_4500",
+          apiBaseUrl: API_URL,
+          token
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ message: "Falha ao comunicar com agente local" }));
+        throw new Error(data.message ?? "Falha ao comunicar com agente local");
+      }
+
+      return response.json() as Promise<{ biometricExternalId?: string }>;
+    },
+    onSuccess: async (result, employeeId) => {
+      setActionMessage("Biometria cadastrada pelo agente local com sucesso.");
+      if (result.biometricExternalId) {
+        setBiometricExternalId(result.biometricExternalId);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+      await queryClient.invalidateQueries({ queryKey: ["employee-details", employeeId] });
+    }
+  });
+
   function loadEmployee(employee: Employee) {
     setActionMessage("");
     setSelectedId(employee.id);
@@ -269,10 +305,10 @@ export function EmployeesPage() {
           </div>
         )}
 
-        {(actionMessage || statusMutation.isError || deleteMutation.isError) && (
+        {(actionMessage || statusMutation.isError || deleteMutation.isError || enrollWithAgent.isError) && (
           <div
             className={`rounded-xl p-3 text-sm ${
-              statusMutation.isError || deleteMutation.isError
+              statusMutation.isError || deleteMutation.isError || enrollWithAgent.isError
                 ? "bg-red-50 text-red-700"
                 : "bg-emerald-50 text-emerald-700"
             }`}
@@ -281,6 +317,8 @@ export function EmployeesPage() {
               ? (deleteMutation.error as Error).message
               : statusMutation.isError
                 ? (statusMutation.error as Error).message
+                : enrollWithAgent.isError
+                  ? `${(enrollWithAgent.error as Error).message}. Inicie o agente no Windows e tente novamente.`
                 : actionMessage}
           </div>
         )}
@@ -465,6 +503,14 @@ export function EmployeesPage() {
             <h3 className="font-semibold">Biometria U.are.U 4500 (integracao via agente local)</h3>
             <p className="text-sm text-slate-600">Status: {biometricStatusLabel(selectedEmployee.biometric?.status)}</p>
             <div className="grid gap-2">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => enrollWithAgent.mutate(selectedEmployee.id)}
+                disabled={enrollWithAgent.isPending}
+              >
+                {enrollWithAgent.isPending ? "Lendo digital no agente..." : "Cadastrar biometria via agente Windows"}
+              </button>
               <button type="button" className="btn-secondary" onClick={() => startBiometric.mutate(selectedEmployee.id)}>
                 Iniciar vinculo biometrico
               </button>
