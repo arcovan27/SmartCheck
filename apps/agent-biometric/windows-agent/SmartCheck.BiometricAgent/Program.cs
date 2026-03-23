@@ -485,6 +485,36 @@ sealed class UareuFingerprintService : IFingerprintService
 
         candidatePaths.Add(Path.Combine(AppContext.BaseDirectory, "sdk", "DPUruNet.dll"));
         candidatePaths.Add(Path.Combine(AppContext.BaseDirectory, "DPUruNet.dll"));
+        candidatePaths.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "DigitalPersona",
+            "U.are.U SDK",
+            "Bin",
+            "DPUruNet.dll"
+        ));
+        candidatePaths.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            "DigitalPersona",
+            "U.are.U SDK",
+            "Bin",
+            "DPUruNet.dll"
+        ));
+        candidatePaths.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "HID Global",
+            "DigitalPersona",
+            "U.are.U SDK",
+            "Bin",
+            "DPUruNet.dll"
+        ));
+        candidatePaths.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            "HID Global",
+            "DigitalPersona",
+            "U.are.U SDK",
+            "Bin",
+            "DPUruNet.dll"
+        ));
 
         foreach (var path in candidatePaths.Distinct())
         {
@@ -575,10 +605,21 @@ sealed class TemplateStore
         var baseDir = Environment.GetEnvironmentVariable("AGENT_DATA_DIR");
         if (string.IsNullOrWhiteSpace(baseDir))
         {
-            baseDir = Path.Combine(AppContext.BaseDirectory, "data");
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            baseDir = Path.Combine(localAppData, "SmartCheck", "Biometric Agent", "data");
         }
 
-        Directory.CreateDirectory(baseDir);
+        try
+        {
+            Directory.CreateDirectory(baseDir);
+        }
+        catch
+        {
+            var tempFallback = Path.Combine(Path.GetTempPath(), "SmartCheck", "Biometric Agent", "data");
+            Directory.CreateDirectory(tempFallback);
+            baseDir = tempFallback;
+        }
+
         _filePath = Path.Combine(baseDir, "templates.json");
     }
 

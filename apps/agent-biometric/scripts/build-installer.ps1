@@ -1,6 +1,7 @@
 param(
   [string]$Version = "",
   [string]$Configuration = "Release",
+  [string]$SdkDllDir = "",
   [switch]$NoInstaller
 )
 
@@ -49,6 +50,34 @@ function To-AssemblyVersion([string]$semver) {
   return "$($parts[0]).$($parts[1]).$($parts[2]).0"
 }
 
+function Resolve-SdkDir([string]$explicitDir) {
+  $candidates = @()
+
+  if (-not [string]::IsNullOrWhiteSpace($explicitDir)) {
+    $candidates += $explicitDir
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($env:UAREU_SDK_DLL_DIR)) {
+    $candidates += $env:UAREU_SDK_DLL_DIR
+  }
+
+  $candidates += @(
+    "$env:ProgramFiles\DigitalPersona\U.are.U SDK\Bin",
+    "$env:ProgramFiles(x86)\DigitalPersona\U.are.U SDK\Bin",
+    "$env:ProgramFiles\HID Global\DigitalPersona\U.are.U SDK\Bin",
+    "$env:ProgramFiles(x86)\HID Global\DigitalPersona\U.are.U SDK\Bin"
+  )
+
+  foreach ($dir in $candidates | Select-Object -Unique) {
+    if ([string]::IsNullOrWhiteSpace($dir)) { continue }
+    if (Test-Path (Join-Path $dir "DPUruNet.dll")) {
+      return $dir
+    }
+  }
+
+  return $null
+}
+
 $agentRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $projectPath = Join-Path $agentRoot "windows-agent\SmartCheck.BiometricAgent\SmartCheck.BiometricAgent.csproj"
 $issPath = Join-Path $agentRoot "installer\SmartCheckBiometricAgent.iss"
@@ -89,6 +118,17 @@ dotnet publish $projectPath `
 
 if ($LASTEXITCODE -ne 0) {
   throw "Falha no dotnet publish"
+}
+
+$resolvedSdkDir = Resolve-SdkDir $SdkDllDir
+if ($resolvedSdkDir) {
+  $targetSdkDir = Join-Path $publishDir "sdk"
+  New-Item -ItemType Directory -Force -Path $targetSdkDir | Out-Null
+  Copy-Item -Path (Join-Path $resolvedSdkDir "*.dll") -Destination $targetSdkDir -Force -ErrorAction SilentlyContinue
+  Write-Host "SDK U.are.U copiado para o pacote a partir de: $resolvedSdkDir" -ForegroundColor Green
+}
+else {
+  Write-Host "SDK U.are.U nao encontrado no build. O agente tentara localizar no Windows do cliente." -ForegroundColor Yellow
 }
 
 if ($NoInstaller) {

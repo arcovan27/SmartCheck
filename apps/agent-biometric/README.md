@@ -5,16 +5,12 @@ Agente local Windows em .NET 8 para integrar o leitor U.are.U 4500 mantendo a AP
 - `POST /enroll`
 - `POST /identify`
 
-## Rodar no Windows
-No diretorio raiz do projeto:
-
-```powershell
-npm run dev -w @smartcheck/agent-biometric
-```
-
-Padrao de execucao local:
-- Host: `127.0.0.1`
-- Porta: `4100`
+## Experiencia para o cliente final
+Depois de gerar o instalador e executar o setup:
+- o agente instala e inicia automaticamente
+- cria atalho no menu iniciar
+- entra na inicializacao automatica do Windows
+- fica pronto para uso sem precisar PowerShell
 
 ## Gerar instalador (Inno Setup)
 Requisitos:
@@ -37,32 +33,33 @@ Se quiser apenas publicar sem empacotar:
 npm run publish:win -w @smartcheck/agent-biometric
 ```
 
-## Configurar SDK U.are.U
-1. Instale driver e SDK da DigitalPersona/HID no Windows.
-2. Garanta acesso ao arquivo `DPUruNet.dll`.
-3. Aponte a pasta do SDK antes de iniciar o agente:
+## SDK U.are.U sem configuracao manual no cliente
+No build do instalador, o script tenta embutir automaticamente o SDK (`DPUruNet.dll`) no pacote:
+1. Pasta informada por `-SdkDllDir`
+2. `UAREU_SDK_DLL_DIR`
+3. Pastas comuns em `Program Files`
 
+Em runtime, o agente tambem tenta localizar automaticamente o SDK em:
+- pasta `sdk` ao lado do executavel
+- pasta do proprio agente
+- caminhos comuns do Windows
+
+## Rodar em desenvolvimento
 ```powershell
-$env:UAREU_SDK_DLL_DIR="C:\SDK\UareU\Lib\NET"; npm run dev -w @smartcheck/agent-biometric
+npm run dev -w @smartcheck/agent-biometric
 ```
 
-Se `DPUruNet.dll` nao for encontrada, o agente entra automaticamente em modo `mock`.
+Padrao de execucao local:
+- Host: `127.0.0.1`
+- Porta: `4100`
 
-## Variaveis de ambiente
+## Variaveis de ambiente (opcionais)
 - `AGENT_HOST` (padrao `127.0.0.1`)
 - `AGENT_PORT` (padrao `4100`)
 - `AGENT_ALLOWED_ORIGINS` (padrao `*`)
 - `SMARTCHECK_BIOMETRIC_MODE` (`sdk` padrao, ou `mock`)
-- `UAREU_SDK_DLL_DIR` (pasta onde esta `DPUruNet.dll`)
-- `AGENT_DATA_DIR` (pasta para cache local de templates)
-
-## Fluxo de cadastro biometrico
-1. Frontend chama `POST /enroll` no agente local.
-2. Agente chama API SmartCheck:
-- `/biometric/enroll/start`
-- captura template no leitor
-- `/biometric/enroll/finish`
-3. API marca biometria como cadastrada.
+- `UAREU_SDK_DLL_DIR` (opcional)
+- `AGENT_DATA_DIR` (opcional)
 
 ## Endpoint de saude
 ```powershell
