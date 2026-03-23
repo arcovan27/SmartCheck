@@ -9,3 +9,6 @@ apps/api/uploads/*
 apps/api/.env
 tmp-extracted
 extract-docs.js
+**/bin
+**/obj
+apps/agent-biometric/windows-agent/SmartCheck.BiometricAgent/data/templates.json

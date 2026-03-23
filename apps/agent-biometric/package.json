@@ -2,9 +2,10 @@
   "name": "@smartcheck/agent-biometric",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "node src/server.mjs",
-    "start": "node src/server.mjs"
+    "dev": "dotnet run --project windows-agent/SmartCheck.BiometricAgent/SmartCheck.BiometricAgent.csproj",
+    "start": "dotnet run --project windows-agent/SmartCheck.BiometricAgent/SmartCheck.BiometricAgent.csproj",
+    "build": "dotnet build windows-agent/SmartCheck.BiometricAgent/SmartCheck.BiometricAgent.csproj",
+    "dev:legacy-node": "node src/server.mjs"
   }
 }
