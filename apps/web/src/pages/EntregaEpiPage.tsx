@@ -280,8 +280,7 @@ export function EntregaEpiPage() {
             <div class="stamp">
               <strong>Assinatura do funcionario (biometria)</strong>
               Nome: ${escapeHtml(employee.name ?? "-")}<br/>
-              ID biometria: ${escapeHtml(employeeBioId)}<br/>
-              Confirmado em: ${escapeHtml(signedAt)}
+              ID biometria: ${escapeHtml(employeeBioId)}
             </div>
             <div class="stamp">
               <strong>Assinatura do responsavel (biometria)</strong>
