@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, getUploadedFileUrl, uploadFile } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -57,9 +57,9 @@ export function ExecucaoChecklistPage() {
   const templatesQuery = useQuery({
     queryKey: ["checklist-templates-exec", equipmentId],
     queryFn: () =>
-      apiRequest<any[]>(
-        equipmentId ? `/checklist-templates?equipmentId=${equipmentId}` : "/checklist-templates"
-      )
+      equipmentId
+        ? apiRequest<any[]>(`/checklist-templates?equipmentId=${equipmentId}`)
+        : Promise.resolve([])
   });
   const equipmentHistoryQuery = useQuery({
     queryKey: ["equipment-history", equipmentId],
@@ -71,6 +71,16 @@ export function ExecucaoChecklistPage() {
     () => templatesQuery.data?.find((template) => template.id === templateId),
     [templatesQuery.data, templateId]
   );
+
+  useEffect(() => {
+    if (!equipmentId) {
+      setTemplateId("");
+      return;
+    }
+
+    const firstTemplateId = templatesQuery.data?.[0]?.id ?? "";
+    setTemplateId(firstTemplateId);
+  }, [equipmentId, templatesQuery.data]);
 
   const groupedItems = useMemo(() => {
     if (!selectedTemplate) return [];
@@ -173,7 +183,6 @@ export function ExecucaoChecklistPage() {
             value={equipmentId}
             onChange={(e) => {
               setEquipmentId(e.target.value);
-              setTemplateId("");
               setItems({});
             }}
             required
@@ -185,23 +194,18 @@ export function ExecucaoChecklistPage() {
               </option>
             ))}
           </select>
-          <select
-            className="select"
-            value={templateId}
-            onChange={(e) => {
-              setTemplateId(e.target.value);
-              setItems({});
-            }}
-            required
-          >
-            <option value="">Selecione o checklist</option>
-            {templatesQuery.data?.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.name}
-              </option>
-            ))}
-          </select>
+          <input
+            className="input"
+            value={selectedTemplate?.name ?? ""}
+            placeholder={equipmentId ? "Checklist vinculado ao equipamento" : "Selecione um equipamento"}
+            readOnly
+          />
         </div>
+        {equipmentId && !selectedTemplate && (
+          <p className="text-sm text-amber-700">
+            Este equipamento ainda não possui checklist vinculado.
+          </p>
+        )}
         {selectedTemplate && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
             <p className="font-semibold">{codeDescription(selectedTemplate.code)}</p>
@@ -217,7 +221,7 @@ export function ExecucaoChecklistPage() {
         <h2 className="section-title">Formulario real digitalizado</h2>
         {!selectedTemplate && (
           <p className="text-sm text-slate-500">
-            Selecione um equipamento e um checklist para preencher o formulario operacional.
+            Selecione um equipamento para preencher o formulario operacional.
           </p>
         )}
 
