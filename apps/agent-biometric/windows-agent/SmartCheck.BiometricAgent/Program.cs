@@ -142,7 +142,7 @@ app.MapPost("/enroll", async (EnrollRequest request, IFingerprintService fingerp
 
         var provider = string.IsNullOrWhiteSpace(request.Provider) ? "UAREU_4500" : request.Provider.Trim();
 
-        await apiClient.PostAsync(
+        var startResult = await apiClient.PostAsync(
             request.ApiBaseUrl,
             "/biometric/enroll/start",
             request.Token,
@@ -160,12 +160,24 @@ app.MapPost("/enroll", async (EnrollRequest request, IFingerprintService fingerp
             logger.LogWarning(captureEx, "Captura no leitor falhou para employeeId {EmployeeId}. Prosseguindo com vinculo por externalId.", request.EmployeeId);
         }
 
-        var biometricExternalId = string.IsNullOrWhiteSpace(request.BiometricExternalId)
-            ? BuildExternalId(
-                request.EmployeeId,
-                captured?.TemplateBase64 ?? $"{request.EmployeeId}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}"
-              )
-            : request.BiometricExternalId.Trim();
+        string? existingExternalId = null;
+        if (startResult.ValueKind == JsonValueKind.Object
+            && startResult.TryGetProperty("biometric", out var biometricNode)
+            && biometricNode.ValueKind == JsonValueKind.Object
+            && biometricNode.TryGetProperty("biometricExternalId", out var existingExternalIdNode)
+            && existingExternalIdNode.ValueKind == JsonValueKind.String)
+        {
+            existingExternalId = existingExternalIdNode.GetString()?.Trim();
+        }
+
+        var biometricExternalId = !string.IsNullOrWhiteSpace(request.BiometricExternalId)
+            ? request.BiometricExternalId.Trim()
+            : !string.IsNullOrWhiteSpace(existingExternalId)
+                ? existingExternalId
+                : BuildExternalId(
+                    request.EmployeeId,
+                    captured?.TemplateBase64 ?? $"{request.EmployeeId}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}"
+                  );
 
         await apiClient.PostAsync(
             request.ApiBaseUrl,
@@ -372,7 +384,7 @@ sealed class UareuFingerprintService : IFingerprintService
             throw new InvalidOperationException($"SDK U.are.U indisponivel: {LastError ?? "nao encontrado"}");
         }
 
-        var templateBytes = TryCaptureTemplateBytes(_assembly, ct, _logger);
+        var templateBytes = TryCaptureTemplateBytes(_assembly, ct, _logger, _sdkDir);
         if (templateBytes is null || templateBytes.Length == 0)
         {
             throw new InvalidOperationException("Falha ao capturar template no U.are.U 4500. Verifique driver e SDK.");
@@ -390,16 +402,15 @@ sealed class UareuFingerprintService : IFingerprintService
 
         try
         {
-            var probe = Convert.FromBase64String(probeTemplateBase64);
-            var enrolled = Convert.FromBase64String(enrolledTemplateBase64);
-
             var compareType = _assembly.GetType("DPUruNet.Comparison");
-            if (compareType is null)
+            var fmdType = _assembly.GetType("DPUruNet.Fmd");
+            var fmdFormatType = _assembly.GetType("DPUruNet.Constants+Formats+Fmd");
+            if (compareType is null || fmdType is null || fmdFormatType is null)
             {
                 return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
             }
 
-            var compareMethod = compareType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+            var compareMethod = compareType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
                 .FirstOrDefault(method => method.Name.Equals("Compare", StringComparison.OrdinalIgnoreCase)
                     && method.GetParameters().Length == 4);
 
@@ -408,8 +419,51 @@ sealed class UareuFingerprintService : IFingerprintService
                 return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
             }
 
-            // API do SDK pode variar. Se comparacao por bytes nao estiver disponivel, cai para igualdade.
-            return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+            var ansiFormat = Enum.GetValues(fmdFormatType)
+                .Cast<object>()
+                .FirstOrDefault(value => value.ToString()?.Contains("ANSI", StringComparison.OrdinalIgnoreCase) == true)
+                ?? Enum.GetValues(fmdFormatType).Cast<object>().FirstOrDefault();
+
+            if (ansiFormat is null)
+            {
+                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+            }
+
+            var probeBytes = Convert.FromBase64String(probeTemplateBase64);
+            var enrolledBytes = Convert.FromBase64String(enrolledTemplateBase64);
+            var probeFmd = TryBuildFmd(fmdType, probeBytes, Convert.ToInt32(ansiFormat));
+            var enrolledFmd = TryBuildFmd(fmdType, enrolledBytes, Convert.ToInt32(ansiFormat));
+            if (probeFmd is null || enrolledFmd is null)
+            {
+                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+            }
+
+            var comparison = Activator.CreateInstance(compareType);
+            if (comparison is null)
+            {
+                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+            }
+
+            var compareResult = compareMethod.Invoke(comparison, [probeFmd, 0, enrolledFmd, 0]);
+            if (compareResult is null)
+            {
+                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+            }
+
+            var resultCode = compareResult.GetType().GetProperty("ResultCode", BindingFlags.Public | BindingFlags.Instance)?.GetValue(compareResult)?.ToString();
+            if (!string.Equals(resultCode, "DP_SUCCESS", StringComparison.OrdinalIgnoreCase))
+            {
+                return Task.FromResult(false);
+            }
+
+            var scoreObj = compareResult.GetType().GetProperty("Score", BindingFlags.Public | BindingFlags.Instance)?.GetValue(compareResult);
+            if (scoreObj is int score)
+            {
+                var threshold = 0x7fffffff / 100000;
+                return Task.FromResult(score <= threshold);
+            }
+
+            return Task.FromResult(false);
         }
         catch
         {
@@ -417,7 +471,7 @@ sealed class UareuFingerprintService : IFingerprintService
         }
     }
 
-    private static byte[]? TryCaptureTemplateBytes(Assembly assembly, CancellationToken ct, ILogger logger)
+    private static byte[]? TryCaptureTemplateBytes(Assembly assembly, CancellationToken ct, ILogger logger, string sdkDir)
     {
         var readerCollectionType = assembly.GetType("DPUruNet.ReaderCollection");
         var readerType = assembly.GetType("DPUruNet.Reader");
@@ -568,6 +622,12 @@ sealed class UareuFingerprintService : IFingerprintService
         {
             var details = $"ResultCode={lastResultCode ?? "n/a"}, Quality={lastQuality ?? "n/a"}";
             throw new InvalidOperationException($"Tempo limite de captura U.are.U excedido (25s). {details}");
+        }
+
+        var fmdViaX = TryCreateFmdBytesViaXFeatureExtraction(fid, logger, sdkDir);
+        if (fmdViaX is not null && fmdViaX.Length > 0)
+        {
+            return fmdViaX;
         }
 
         // Algumas versoes do SDK nao expoem DPUruNet.Engine da mesma forma.
@@ -934,6 +994,120 @@ sealed class UareuFingerprintService : IFingerprintService
             {
                 // Tenta proxima sobrecarga.
             }
+        }
+
+        return null;
+    }
+
+    private static object? TryBuildFmd(Type fmdType, byte[] bytes, int format)
+    {
+        foreach (var version in new[] { "1.0.0", "1.0.1", string.Empty })
+        {
+            try
+            {
+                return Activator.CreateInstance(fmdType, [bytes, format, version]);
+            }
+            catch
+            {
+                // tenta proxima versao
+            }
+        }
+
+        return null;
+    }
+
+    private static byte[]? TryCreateFmdBytesViaXFeatureExtraction(object fid, ILogger logger, string sdkDir)
+    {
+        Assembly? xAssembly = AppDomain.CurrentDomain.GetAssemblies()
+            .FirstOrDefault(asm => string.Equals(asm.GetName().Name, "DPXUru", StringComparison.OrdinalIgnoreCase));
+
+        if (xAssembly is null)
+        {
+            var candidatePaths = new List<string>();
+            if (!string.IsNullOrWhiteSpace(sdkDir))
+            {
+                candidatePaths.Add(Path.Combine(sdkDir, "DPXUru.dll"));
+                candidatePaths.Add(Path.Combine(sdkDir, "Bin", "DPXUru.dll"));
+                candidatePaths.Add(Path.Combine(sdkDir, ".NET", "DPXUru.dll"));
+                candidatePaths.Add(Path.Combine(sdkDir, ".NET", "Bin", "DPXUru.dll"));
+            }
+
+            candidatePaths.Add(Path.Combine(AppContext.BaseDirectory, "DPXUru.dll"));
+            candidatePaths.Add(Path.Combine(AppContext.BaseDirectory, "sdk", "DPXUru.dll"));
+            candidatePaths.Add(Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "DigitalPersona",
+                "U.are.U SDK",
+                "Windows",
+                "Lib",
+                "DotNET",
+                "DPXUru.dll"
+            ));
+
+            foreach (var path in candidatePaths.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!File.Exists(path)) continue;
+                try
+                {
+                    xAssembly = Assembly.LoadFrom(path);
+                    break;
+                }
+                catch
+                {
+                    // tenta proximo caminho
+                }
+            }
+        }
+
+        if (xAssembly is null) return null;
+
+        try
+        {
+            var xFidType = xAssembly.GetType("DPXUru.XFid");
+            var xFeatureType = xAssembly.GetType("DPXUru.XFeatureExtraction");
+            if (xFidType is null || xFeatureType is null) return null;
+
+            var xFid = Activator.CreateInstance(xFidType);
+            if (xFid is null) return null;
+            xFidType.GetProperty("Fid", BindingFlags.Public | BindingFlags.Instance)?.SetValue(xFid, fid);
+
+            var xFeature = Activator.CreateInstance(xFeatureType);
+            if (xFeature is null) return null;
+
+            var createMethod = xFeatureType.GetMethod("CreateFmdFromFid", BindingFlags.Public | BindingFlags.Instance, [xFidType, typeof(string)]);
+            if (createMethod is null) return null;
+
+            var xFmdResult = createMethod.Invoke(xFeature, [xFid, "ANSI"]);
+            if (xFmdResult is null) return null;
+
+            var resultCode = xFmdResult.GetType().GetProperty("ResultCode", BindingFlags.Public | BindingFlags.Instance)?.GetValue(xFmdResult)?.ToString();
+            if (!string.Equals(resultCode, "DP_SUCCESS", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var xFmd = xFmdResult.GetType().GetProperty("Fmd", BindingFlags.Public | BindingFlags.Instance)?.GetValue(xFmdResult);
+            if (xFmd is null) return null;
+
+            var bytesObj = xFmd.GetType().GetProperty("Bytes", BindingFlags.Public | BindingFlags.Instance)?.GetValue(xFmd);
+            if (bytesObj is IEnumerable values)
+            {
+                var bytes = new List<byte>();
+                foreach (var value in values)
+                {
+                    if (value is null) continue;
+                    bytes.Add(Convert.ToByte(value));
+                }
+
+                if (bytes.Count > 0)
+                {
+                    return bytes.ToArray();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Falha ao converter FID para FMD via DPXUru.");
         }
 
         return null;

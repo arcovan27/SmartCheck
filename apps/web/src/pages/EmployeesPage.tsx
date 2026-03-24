@@ -50,7 +50,6 @@ export function EmployeesPage() {
   const [form, setForm] = useState(emptyForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
-  const [biometricExternalId, setBiometricExternalId] = useState("");
   const [actionMessage, setActionMessage] = useState("");
 
   useEffect(() => {
@@ -80,9 +79,6 @@ export function EmployeesPage() {
     () => employeesQuery.data?.find((employee) => employee.id === selectedId) ?? null,
     [employeesQuery.data, selectedId]
   );
-  const selectedEmployeeExternalId = selectedEmployee?.biometric?.biometricExternalId?.trim() ?? "";
-  const effectiveBiometricExternalId = biometricExternalId.trim() || selectedEmployeeExternalId;
-  const isBiometricAlreadyRegistered = selectedEmployee?.biometric?.status === "CADASTRADA";
 
   const employeeDetailsQuery = useQuery({
     queryKey: ["employee-details", selectedId],
@@ -160,36 +156,6 @@ export function EmployeesPage() {
     }
   });
 
-  const startBiometric = useMutation({
-    mutationFn: (employeeId: string) =>
-      apiRequest("/biometric/enroll/start", {
-        method: "POST",
-        body: JSON.stringify({ employeeId, provider: "UAREU_4500" })
-      }),
-    onSuccess: () => {
-      setActionMessage("Vinculo biometrico iniciado. Informe o ID e confirme.");
-      queryClient.invalidateQueries({ queryKey: ["employees"] });
-    }
-  });
-
-  const finishBiometric = useMutation({
-    mutationFn: (employeeId: string) =>
-      apiRequest("/biometric/enroll/finish", {
-        method: "POST",
-        body: JSON.stringify({
-          employeeId,
-          biometricExternalId: effectiveBiometricExternalId,
-          provider: "UAREU_4500"
-        })
-      }),
-    onSuccess: () => {
-      setActionMessage("Biometria vinculada com sucesso.");
-      setBiometricExternalId("");
-      queryClient.invalidateQueries({ queryKey: ["employees"] });
-      if (selectedId) queryClient.invalidateQueries({ queryKey: ["employee-details", selectedId] });
-    }
-  });
-
   const deleteBiometric = useMutation({
     mutationFn: (employeeId: string) =>
       apiRequest(`/employees/${employeeId}/biometric`, {
@@ -228,9 +194,6 @@ export function EmployeesPage() {
     },
     onSuccess: async (result, employeeId) => {
       setActionMessage("Biometria cadastrada pelo agente local com sucesso.");
-      if (result.biometricExternalId) {
-        setBiometricExternalId(result.biometricExternalId);
-      }
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       await queryClient.invalidateQueries({ queryKey: ["employee-details", employeeId] });
     }
@@ -248,8 +211,7 @@ export function EmployeesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           apiBaseUrl: API_URL,
-          token,
-          biometricExternalId: employee.biometric?.biometricExternalId ?? undefined
+          token
         })
       });
 
@@ -364,8 +326,6 @@ export function EmployeesPage() {
           statusMutation.isError ||
           deleteMutation.isError ||
           enrollWithAgent.isError ||
-          startBiometric.isError ||
-          finishBiometric.isError ||
           deleteBiometric.isError ||
           testIdentifyWithAgent.isError) && (
           <div
@@ -373,8 +333,6 @@ export function EmployeesPage() {
               statusMutation.isError ||
               deleteMutation.isError ||
               enrollWithAgent.isError ||
-              startBiometric.isError ||
-              finishBiometric.isError ||
               deleteBiometric.isError ||
               testIdentifyWithAgent.isError
                 ? "bg-red-50 text-red-700"
@@ -387,14 +345,10 @@ export function EmployeesPage() {
                 ? (statusMutation.error as Error).message
                 : enrollWithAgent.isError
                   ? `${(enrollWithAgent.error as Error).message}. Inicie o agente no Windows e tente novamente.`
-                  : startBiometric.isError
-                    ? (startBiometric.error as Error).message
-                    : finishBiometric.isError
-                      ? (finishBiometric.error as Error).message
-                      : deleteBiometric.isError
-                        ? (deleteBiometric.error as Error).message
-                        : testIdentifyWithAgent.isError
-                          ? (testIdentifyWithAgent.error as Error).message
+                  : deleteBiometric.isError
+                    ? (deleteBiometric.error as Error).message
+                    : testIdentifyWithAgent.isError
+                      ? (testIdentifyWithAgent.error as Error).message
                 : actionMessage}
           </div>
         )}
@@ -585,8 +539,6 @@ export function EmployeesPage() {
                 onClick={() => enrollWithAgent.mutate(selectedEmployee.id)}
                 disabled={
                   enrollWithAgent.isPending ||
-                  finishBiometric.isPending ||
-                  startBiometric.isPending ||
                   testIdentifyWithAgent.isPending
                 }
               >
@@ -603,43 +555,6 @@ export function EmployeesPage() {
                 }
               >
                 {testIdentifyWithAgent.isPending ? "Testando reconhecimento..." : "Testar reconhecimento biometrico"}
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => startBiometric.mutate(selectedEmployee.id)}
-                disabled={
-                  startBiometric.isPending ||
-                  enrollWithAgent.isPending ||
-                  finishBiometric.isPending ||
-                  testIdentifyWithAgent.isPending
-                }
-              >
-                {startBiometric.isPending ? "Iniciando vinculo..." : "Iniciar vinculo biometrico"}
-              </button>
-              <input
-                className="input"
-                placeholder="ID retornado pelo agente local"
-                value={biometricExternalId}
-                onChange={(event) => setBiometricExternalId(event.target.value)}
-              />
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => finishBiometric.mutate(selectedEmployee.id)}
-                disabled={
-                  !effectiveBiometricExternalId ||
-                  finishBiometric.isPending ||
-                  enrollWithAgent.isPending ||
-                  testIdentifyWithAgent.isPending ||
-                  (isBiometricAlreadyRegistered && !biometricExternalId.trim())
-                }
-              >
-                {finishBiometric.isPending
-                  ? "Confirmando biometria..."
-                  : isBiometricAlreadyRegistered && !biometricExternalId.trim()
-                    ? "Biometria ja cadastrada"
-                    : "Confirmar biometria vinculada"}
               </button>
               <button type="button" className="btn-danger" onClick={() => deleteBiometric.mutate(selectedEmployee.id)}>
                 Remover biometria
