@@ -153,31 +153,38 @@ export function EpiPage() {
           />
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
-          <input
-            className="input"
-            placeholder="Unidade"
-            value={epiForm.unit}
-            onChange={(e) => setEpiForm({ ...epiForm, unit: e.target.value })}
-            required
-          />
-          <input
-            className="input"
-            type="number"
-            min={0}
-            placeholder="Estoque"
-            value={epiForm.stock}
-            onChange={(e) => setEpiForm({ ...epiForm, stock: Number(e.target.value) })}
-            required
-          />
-          <input
-            className="input"
-            type="number"
-            min={0}
-            placeholder="Estoque minimo"
-            value={epiForm.minimumStock}
-            onChange={(e) => setEpiForm({ ...epiForm, minimumStock: Number(e.target.value) })}
-            required
-          />
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-600">Unidade</label>
+            <input
+              className="input"
+              placeholder="UN"
+              value={epiForm.unit}
+              onChange={(e) => setEpiForm({ ...epiForm, unit: e.target.value })}
+              required
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-600">Estoque</label>
+            <input
+              className="input"
+              type="number"
+              min={0}
+              value={epiForm.stock}
+              onChange={(e) => setEpiForm({ ...epiForm, stock: Number(e.target.value) })}
+              required
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-600">Estoque minimo</label>
+            <input
+              className="input"
+              type="number"
+              min={0}
+              value={epiForm.minimumStock}
+              onChange={(e) => setEpiForm({ ...epiForm, minimumStock: Number(e.target.value) })}
+              required
+            />
+          </div>
         </div>
         <input
           className="input"
