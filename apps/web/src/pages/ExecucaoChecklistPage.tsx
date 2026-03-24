@@ -50,6 +50,7 @@ export function ExecucaoChecklistPage() {
   const [fuelLevel, setFuelLevel] = useState("");
   const [notes, setNotes] = useState("");
   const [openedHistoryDetails, setOpenedHistoryDetails] = useState<Record<string, boolean>>({});
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const equipmentsQuery = useQuery({ queryKey: ["equipments"], queryFn: () => apiRequest<any[]>("/equipments") });
   const templatesQuery = useQuery({
@@ -406,19 +407,18 @@ export function ExecucaoChecklistPage() {
                                       const imageUrl = getUploadedFileUrl(attachment.path);
                                       if (!imageUrl) return null;
                                       return (
-                                        <a
+                                        <button
                                           key={attachment.id}
-                                          href={imageUrl}
-                                          target="_blank"
-                                          rel="noreferrer"
                                           className="block"
+                                          type="button"
+                                          onClick={() => setPreviewImageUrl(imageUrl)}
                                         >
                                           <img
                                             src={imageUrl}
                                             alt="Foto da falha"
                                             className="h-16 w-16 rounded-md border border-slate-200 object-cover"
                                           />
-                                        </a>
+                                        </button>
                                       );
                                     })}
                                   </div>
@@ -461,6 +461,29 @@ export function ExecucaoChecklistPage() {
           </div>
         )}
       </section>
+
+      {previewImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          <div className="relative">
+            <button
+              type="button"
+              className="btn-danger absolute -right-2 -top-2 z-10"
+              onClick={() => setPreviewImageUrl(null)}
+            >
+              Fechar
+            </button>
+            <img
+              src={previewImageUrl}
+              alt="Visualizacao da falha"
+              className="max-h-[90vh] max-w-[90vw] rounded-lg border border-slate-200 bg-white object-contain"
+              onClick={(event) => event.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
