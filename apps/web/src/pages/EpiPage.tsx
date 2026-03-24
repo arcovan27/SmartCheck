@@ -42,6 +42,73 @@ export function EpiPage() {
     [episQuery.data]
   );
 
+  function generatePurchaseList() {
+    const items = lowStockEpis;
+    if (items.length === 0) {
+      window.alert("Nao ha EPIs em estoque minimo no momento.");
+      return;
+    }
+
+    const rows = items
+      .map((epi) => {
+        const status = epi.stock === 0 ? "ZERADO" : "ESTOQUE MINIMO";
+        const suggestedQty = Math.max(epi.minimumStock - epi.stock, 1);
+        return `
+          <tr>
+            <td>${epi.name}</td>
+            <td>${epi.ca}</td>
+            <td>${epi.category}</td>
+            <td>${epi.stock}</td>
+            <td>${epi.minimumStock}</td>
+            <td>${status}</td>
+            <td>${suggestedQty}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Lista de compra de EPI</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 24px; color: #111827; }
+            h1 { margin: 0 0 6px 0; font-size: 22px; }
+            p { margin: 0 0 12px 0; color: #475569; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; font-size: 13px; }
+            th { background: #f1f5f9; }
+          </style>
+        </head>
+        <body>
+          <h1>Lista de compra de EPI</h1>
+          <p>Gerado em: ${new Date().toLocaleString("pt-BR")}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>EPI</th>
+                <th>CA</th>
+                <th>Categoria</th>
+                <th>Estoque atual</th>
+                <th>Estoque minimo</th>
+                <th>Status</th>
+                <th>Sugestao compra</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <script>
+            window.onload = function() { window.print(); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }
+
   const createEpi = useMutation({
     mutationFn: (payload: any) => apiRequest("/epis", { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: () => {
@@ -251,7 +318,12 @@ export function EpiPage() {
       </form>
 
       <section className="card">
-        <h2 className="section-title mb-3">EPIs cadastrados</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="section-title">EPIs cadastrados</h2>
+          <button type="button" className="btn-secondary" onClick={generatePurchaseList}>
+            Gerar lista de compra
+          </button>
+        </div>
         <div className="space-y-2">
           {episQuery.data?.map((epi) => (
             <div
