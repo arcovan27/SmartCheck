@@ -15,7 +15,7 @@ function Get-IsccPath {
   }
 
   $commonPaths = @(
-    "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
+    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
     "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
   )
 
@@ -62,10 +62,16 @@ function Resolve-SdkDir([string]$explicitDir) {
   }
 
   $candidates += @(
+    "$env:ProgramFiles\DigitalPersona\One Touch SDK\.NET",
+    "$env:ProgramFiles\DigitalPersona\One Touch SDK\.NET\bin",
+    "$env:ProgramFiles\DigitalPersona\One Touch SDK\.NET\x64",
+    "${env:ProgramFiles(x86)}\DigitalPersona\One Touch SDK\.NET",
+    "${env:ProgramFiles(x86)}\DigitalPersona\One Touch SDK\.NET\bin",
+    "${env:ProgramFiles(x86)}\DigitalPersona\One Touch SDK\.NET\x64",
     "$env:ProgramFiles\DigitalPersona\U.are.U SDK\Bin",
-    "$env:ProgramFiles(x86)\DigitalPersona\U.are.U SDK\Bin",
+    "${env:ProgramFiles(x86)}\DigitalPersona\U.are.U SDK\Bin",
     "$env:ProgramFiles\HID Global\DigitalPersona\U.are.U SDK\Bin",
-    "$env:ProgramFiles(x86)\HID Global\DigitalPersona\U.are.U SDK\Bin"
+    "${env:ProgramFiles(x86)}\HID Global\DigitalPersona\U.are.U SDK\Bin"
   )
 
   foreach ($dir in $candidates | Select-Object -Unique) {

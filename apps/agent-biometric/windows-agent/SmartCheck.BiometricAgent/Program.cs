@@ -40,22 +40,42 @@ builder.Services.AddSingleton<IFingerprintService>(sp =>
 {
     var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("FingerprintService");
     var mode = (Environment.GetEnvironmentVariable("SMARTCHECK_BIOMETRIC_MODE") ?? "sdk").Trim().ToLowerInvariant();
-
+    var sdkDir = Environment.GetEnvironmentVariable("UAREU_SDK_DLL_DIR") ?? string.Empty;
     if (mode == "mock")
     {
+        logger.LogInformation("Modo biometrico configurado para MOCK.");
         return new MockFingerprintService(logger);
     }
 
-    var sdkDir = Environment.GetEnvironmentVariable("UAREU_SDK_DLL_DIR") ?? string.Empty;
-    var sdkService = new UareuFingerprintService(logger, sdkDir);
-
-    if (!sdkService.IsReady)
+    if (mode == "uareu")
     {
-        logger.LogWarning("SDK U.are.U nao carregou. Motivo: {Reason}. Fallback para MOCK.", sdkService.LastError);
+        var uareuOnly = new UareuFingerprintService(logger, sdkDir);
+        if (uareuOnly.IsReady) return uareuOnly;
+
+        logger.LogWarning("Modo UAREU forcado, mas SDK nao carregou. Motivo: {Reason}. Fallback para MOCK.", uareuOnly.LastError);
         return new MockFingerprintService(logger);
     }
 
-    return sdkService;
+    if (mode == "dpfp")
+    {
+        var dpfpOnly = new DpfpFingerprintService(logger, sdkDir);
+        if (dpfpOnly.IsReady) return dpfpOnly;
+
+        logger.LogWarning("Modo DPFP forcado, mas SDK nao carregou. Motivo: {Reason}. Fallback para MOCK.", dpfpOnly.LastError);
+        return new MockFingerprintService(logger);
+    }
+
+    // Modo "sdk" (padrao): tenta U.are.U primeiro e depois DPFP.
+    var uareuService = new UareuFingerprintService(logger, sdkDir);
+    if (uareuService.IsReady) return uareuService;
+
+    logger.LogWarning("SDK U.are.U nao carregou. Motivo: {Reason}. Tentando SDK DPFP.", uareuService.LastError);
+
+    var dpfpService = new DpfpFingerprintService(logger, sdkDir);
+    if (dpfpService.IsReady) return dpfpService;
+
+    logger.LogWarning("SDK DPFP nao carregou. Motivo: {Reason}. Fallback para MOCK.", dpfpService.LastError);
+    return new MockFingerprintService(logger);
 });
 
 var app = builder.Build();
@@ -488,6 +508,52 @@ sealed class UareuFingerprintService : IFingerprintService
         candidatePaths.Add(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             "DigitalPersona",
+            "One Touch SDK",
+            ".NET",
+            "DPUruNet.dll"
+        ));
+        candidatePaths.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "DigitalPersona",
+            "One Touch SDK",
+            ".NET",
+            "bin",
+            "DPUruNet.dll"
+        ));
+        candidatePaths.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "DigitalPersona",
+            "One Touch SDK",
+            ".NET",
+            "x64",
+            "DPUruNet.dll"
+        ));
+        candidatePaths.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            "DigitalPersona",
+            "One Touch SDK",
+            ".NET",
+            "DPUruNet.dll"
+        ));
+        candidatePaths.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            "DigitalPersona",
+            "One Touch SDK",
+            ".NET",
+            "bin",
+            "DPUruNet.dll"
+        ));
+        candidatePaths.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            "DigitalPersona",
+            "One Touch SDK",
+            ".NET",
+            "x64",
+            "DPUruNet.dll"
+        ));
+        candidatePaths.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "DigitalPersona",
             "U.are.U SDK",
             "Bin",
             "DPUruNet.dll"
@@ -531,6 +597,344 @@ sealed class UareuFingerprintService : IFingerprintService
         }
 
         return (null, "DPUruNet.dll nao encontrada. Configure UAREU_SDK_DLL_DIR com a pasta do SDK.");
+    }
+}
+
+sealed class DpfpFingerprintService : IFingerprintService
+{
+    private readonly ILogger _logger;
+    private readonly string _sdkDir;
+    private readonly Type? _captureType;
+    private readonly Type? _eventHandlerType;
+    private readonly Type? _sampleType;
+    private readonly Type? _featureExtractionType;
+    private readonly Type? _dataPurposeType;
+    private readonly Type? _captureFeedbackType;
+    private readonly Type? _verificationType;
+    private readonly Type? _templateType;
+
+    public DpfpFingerprintService(ILogger logger, string sdkDir)
+    {
+        _logger = logger;
+        _sdkDir = sdkDir;
+
+        var (assemblies, error) = TryLoadAssemblies(sdkDir);
+        LastError = error;
+
+        if (assemblies is null)
+        {
+            return;
+        }
+
+        var captureAssembly = assemblies["DPFPDevNET.dll"];
+        var sharedAssembly = assemblies["DPFPShrNET.dll"];
+
+        _captureType = captureAssembly.GetType("DPFP.Capture.Capture");
+        _eventHandlerType = captureAssembly.GetType("DPFP.Capture.EventHandler");
+        _sampleType = sharedAssembly.GetType("DPFP.Sample");
+
+        var hasCapture = _captureType is not null && _eventHandlerType is not null && _sampleType is not null;
+        if (!hasCapture)
+        {
+            LastError = "Tipos de captura DPFP nao encontrados (Capture/EventHandler/Sample).";
+            return;
+        }
+
+        if (assemblies.TryGetValue("DPFPEngNET.dll", out var engineAssembly)
+            && assemblies.TryGetValue("DPFPVerNET.dll", out var verificationAssembly))
+        {
+            _featureExtractionType = engineAssembly.GetType("DPFP.Processing.FeatureExtraction");
+            _dataPurposeType = engineAssembly.GetType("DPFP.Processing.DataPurpose");
+            _captureFeedbackType = sharedAssembly.GetType("DPFP.Capture.CaptureFeedback");
+            _verificationType = verificationAssembly.GetType("DPFP.Verification.Verification");
+            _templateType = sharedAssembly.GetType("DPFP.Template");
+        }
+
+        var sdkLocation = string.IsNullOrWhiteSpace(_sdkDir) ? "diretorio padrao do agente" : _sdkDir;
+        _logger.LogInformation("SDK DPFP carregado. Origem configurada: {SdkLocation}", sdkLocation);
+    }
+
+    public string Mode => "dpfp-sdk";
+    public bool IsReady => _captureType is not null && _eventHandlerType is not null && _sampleType is not null;
+    public string? LastError { get; }
+
+    public async Task<CaptureTemplateResult> CaptureTemplateAsync(CancellationToken ct)
+    {
+        if (!IsReady || _captureType is null || _eventHandlerType is null)
+        {
+            throw new InvalidOperationException($"SDK DPFP indisponivel: {LastError ?? "nao encontrado"}");
+        }
+
+        var capture = Activator.CreateInstance(_captureType);
+        if (capture is null)
+        {
+            throw new InvalidOperationException("Nao foi possivel criar instancia de captura DPFP.");
+        }
+
+        var startCaptureMethod = _captureType.GetMethod("StartCapture", BindingFlags.Public | BindingFlags.Instance);
+        var stopCaptureMethod = _captureType.GetMethod("StopCapture", BindingFlags.Public | BindingFlags.Instance);
+        var eventHandlerProperty = _captureType.GetProperty("EventHandler", BindingFlags.Public | BindingFlags.Instance);
+
+        if (startCaptureMethod is null || stopCaptureMethod is null || eventHandlerProperty is null)
+        {
+            throw new InvalidOperationException("API de captura DPFP incompleta (Start/Stop/EventHandler).");
+        }
+
+        var sampleTcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var eventHandler = DpfpCaptureEventProxy.Create(_eventHandlerType, sample =>
+        {
+            if (sample is not null)
+            {
+                sampleTcs.TrySetResult(sample);
+            }
+        });
+
+        eventHandlerProperty.SetValue(capture, eventHandler);
+
+        try
+        {
+            startCaptureMethod.Invoke(capture, null);
+
+            var sample = await sampleTcs.Task.WaitAsync(TimeSpan.FromSeconds(20), ct);
+            if (sample is null)
+            {
+                throw new InvalidOperationException("SDK DPFP retornou amostra nula.");
+            }
+
+            var sampleBytes = ExtractBytes(sample);
+
+            if (sampleBytes is null || sampleBytes.Length == 0)
+            {
+                throw new InvalidOperationException("SDK DPFP retornou amostra vazia.");
+            }
+
+            _logger.LogInformation("Captura DPFP executada.");
+            return new CaptureTemplateResult(Convert.ToBase64String(sampleBytes), "dpfp-sdk");
+        }
+        catch (TimeoutException)
+        {
+            throw new InvalidOperationException("Tempo limite de captura DPFP excedido (20s).");
+        }
+        finally
+        {
+            try
+            {
+                stopCaptureMethod.Invoke(capture, null);
+            }
+            catch
+            {
+                // Ignora falha de encerramento.
+            }
+
+            if (capture is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+        }
+    }
+
+    public Task<bool> IsMatchAsync(string probeTemplateBase64, string enrolledTemplateBase64, CancellationToken ct)
+    {
+        if (_featureExtractionType is null
+            || _dataPurposeType is null
+            || _captureFeedbackType is null
+            || _verificationType is null
+            || _templateType is null
+            || _sampleType is null)
+        {
+            return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+        }
+
+        try
+        {
+            var probeSample = DeserializeSample(probeTemplateBase64);
+            var enrolledTemplate = DeserializeTemplate(enrolledTemplateBase64);
+
+            if (probeSample is null || enrolledTemplate is null)
+            {
+                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+            }
+
+            var verificationPurpose = Enum.Parse(_dataPurposeType, "Verification", ignoreCase: true);
+            var feedbackDefault = Enum.Parse(_captureFeedbackType, "None", ignoreCase: true);
+
+            var featureExtraction = Activator.CreateInstance(_featureExtractionType);
+            if (featureExtraction is null)
+            {
+                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+            }
+
+            var createFeatureSetMethod = _featureExtractionType.GetMethod("CreateFeatureSet", BindingFlags.Public | BindingFlags.Instance);
+            if (createFeatureSetMethod is null)
+            {
+                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+            }
+
+            var args = new object?[] { probeSample, verificationPurpose, feedbackDefault, null };
+            createFeatureSetMethod.Invoke(featureExtraction, args);
+            var probeFeatures = args[3];
+
+            if (probeFeatures is null)
+            {
+                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+            }
+
+            var verification = Activator.CreateInstance(_verificationType);
+            var verifyMethod = _verificationType.GetMethod("Verify", [probeFeatures.GetType(), _templateType]);
+            if (verification is null || verifyMethod is null)
+            {
+                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+            }
+
+            var result = verifyMethod.Invoke(verification, [probeFeatures, enrolledTemplate]);
+            var verifiedProperty = result?.GetType().GetProperty("Verified", BindingFlags.Public | BindingFlags.Instance);
+
+            if (verifiedProperty?.GetValue(result) is bool verified)
+            {
+                return Task.FromResult(verified);
+            }
+        }
+        catch
+        {
+            // Fallback para igualdade literal se SDK nao conseguir verificar.
+        }
+
+        return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+    }
+
+    private object? DeserializeSample(string base64)
+    {
+        if (_sampleType is null) return null;
+
+        try
+        {
+            var bytes = Convert.FromBase64String(base64);
+            using var stream = new MemoryStream(bytes);
+            return Activator.CreateInstance(_sampleType, stream);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private object? DeserializeTemplate(string base64)
+    {
+        if (_templateType is null) return null;
+
+        try
+        {
+            var bytes = Convert.FromBase64String(base64);
+            using var stream = new MemoryStream(bytes);
+            return Activator.CreateInstance(_templateType, stream);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static byte[]? ExtractBytes(object source)
+    {
+        var bytesProperty = source.GetType().GetProperty("Bytes", BindingFlags.Public | BindingFlags.Instance);
+        if (bytesProperty?.GetValue(source) is byte[] bytesFromProperty)
+        {
+            return bytesFromProperty;
+        }
+
+        return null;
+    }
+
+    private static (Dictionary<string, Assembly>? assemblies, string? error) TryLoadAssemblies(string sdkDir)
+    {
+        var candidateDirectories = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(sdkDir))
+        {
+            candidateDirectories.Add(sdkDir);
+            candidateDirectories.Add(Path.Combine(sdkDir, "Bin"));
+            candidateDirectories.Add(Path.Combine(sdkDir, ".NET"));
+            candidateDirectories.Add(Path.Combine(sdkDir, ".NET", "Bin"));
+        }
+
+        candidateDirectories.Add(Path.Combine(AppContext.BaseDirectory, "sdk"));
+        candidateDirectories.Add(AppContext.BaseDirectory);
+        candidateDirectories.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "DigitalPersona",
+            "One Touch SDK",
+            ".NET",
+            "Bin"
+        ));
+        candidateDirectories.Add(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            "DigitalPersona",
+            "One Touch SDK",
+            ".NET",
+            "Bin"
+        ));
+
+        var requiredFiles = new[]
+        {
+            "DPFPShrNET.dll",
+            "DPFPDevNET.dll",
+            "DPFPEngNET.dll",
+            "DPFPVerNET.dll"
+        };
+
+        foreach (var directory in candidateDirectories
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var filePaths = requiredFiles.Select(file => Path.Combine(directory, file)).ToArray();
+                if (filePaths.Any(path => !File.Exists(path))) continue;
+
+                var assemblies = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
+                foreach (var filePath in filePaths)
+                {
+                    var assembly = Assembly.LoadFrom(filePath);
+                    assemblies[Path.GetFileName(filePath)] = assembly;
+                }
+
+                return (assemblies, null);
+            }
+            catch (Exception ex)
+            {
+                return (null, $"Erro ao carregar SDK DPFP em {directory}: {ex.Message}");
+            }
+        }
+
+        return (null, "DPFP*.dll nao encontrada. Configure UAREU_SDK_DLL_DIR com a pasta do SDK DPFP.");
+    }
+}
+
+sealed class DpfpCaptureEventProxy : DispatchProxy
+{
+    public Action<object?>? OnComplete { get; set; }
+
+    protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+    {
+        if (targetMethod?.Name.Equals("OnComplete", StringComparison.OrdinalIgnoreCase) == true
+            && args is not null
+            && args.Length >= 3)
+        {
+            OnComplete?.Invoke(args[2]);
+        }
+
+        return null;
+    }
+
+    public static object Create(Type eventHandlerType, Action<object?> onComplete)
+    {
+        var handler = DispatchProxy.Create(eventHandlerType, typeof(DpfpCaptureEventProxy));
+        if (handler is DpfpCaptureEventProxy proxy)
+        {
+            proxy.OnComplete = onComplete;
+        }
+
+        return handler;
     }
 }
 
