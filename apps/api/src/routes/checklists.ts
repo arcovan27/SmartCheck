@@ -156,6 +156,11 @@ export async function checklistRoutes(app: FastifyInstance) {
       .parse(request.body);
 
     return prisma.$transaction(async (tx) => {
+      const existingTemplateItems = await tx.checklistTemplateItem.findMany({
+        where: { templateId: params.id },
+        select: { id: true, label: true }
+      });
+
       const updatedTemplate = await tx.checklistTemplate.update({
         where: { id: params.id },
         data: {
@@ -169,6 +174,24 @@ export async function checklistRoutes(app: FastifyInstance) {
       });
 
       if (body.items) {
+        const submittedIds = new Set(body.items.map((item) => item.id).filter(Boolean));
+        const removedItems = existingTemplateItems.filter((item) => !submittedIds.has(item.id));
+
+        for (const removed of removedItems) {
+          try {
+            await tx.checklistTemplateItem.delete({
+              where: { id: removed.id }
+            });
+          } catch (error) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+              throw new Error(
+                `Nao foi possivel remover o item "${removed.label}" porque ele ja possui historico de execucao.`
+              );
+            }
+            throw error;
+          }
+        }
+
         for (const item of body.items) {
           if (item.id) {
             await tx.checklistTemplateItem.update({

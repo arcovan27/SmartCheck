@@ -63,14 +63,18 @@ export function ChecklistsPage() {
   function submitTemplate(event: FormEvent) {
     event.preventDefault();
     setMessage("");
+    const validItems = form.items.filter((item) => item.label.trim());
+    if (validItems.length === 0) {
+      setMessage("Adicione pelo menos um item no modelo.");
+      return;
+    }
     saveTemplate.mutate({
       name: form.name,
       code: "OUTRO",
       periodicity: form.periodicity,
       equipmentId: form.equipmentId,
       description: form.description || null,
-      items: form.items
-        .filter((item) => item.label.trim())
+      items: validItems
         .map((item, index) => ({
           id: item.id,
           label: item.label,
@@ -171,7 +175,10 @@ export function ChecklistsPage() {
           />
           <div className="space-y-2">
             {form.items.map((item, index) => (
-              <div key={index} className="grid gap-2 rounded-xl border border-slate-200 p-3 md:grid-cols-[1fr,220px]">
+              <div
+                key={index}
+                className="grid gap-2 rounded-xl border border-slate-200 p-3 md:grid-cols-[1fr,220px,140px]"
+              >
                 <input
                   className="input"
                   placeholder={`Item ${index + 1}`}
@@ -198,6 +205,19 @@ export function ChecklistsPage() {
                     }))
                   }
                 />
+                <button
+                  type="button"
+                  className="btn-danger"
+                  onClick={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      items: prev.items.filter((_, currentIndex) => currentIndex !== index)
+                    }))
+                  }
+                  disabled={form.items.length <= 1}
+                >
+                  Remover
+                </button>
               </div>
             ))}
           </div>
