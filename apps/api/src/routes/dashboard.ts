@@ -11,7 +11,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
       activeEquipments,
       openMaintenances,
       pendingChecklists,
-      duePreventiveAlerts,
       recentMaintenances,
       recentChecklistProblems,
       recentEpiDeliveries
@@ -25,7 +24,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
       prisma.equipment.count({ where: { isActive: true } }),
       prisma.maintenance.count({ where: { status: { not: MaintenanceStatus.CONCLUIDA } } }),
       prisma.checklistTemplate.count({ where: { isActive: true } }),
-      prisma.maintenancePlan.count({ where: { isActive: true } }),
       prisma.maintenance.findMany({
         include: { equipment: true, responsible: true },
         orderBy: { openedAt: "desc" },
@@ -51,8 +49,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         lowStockEpis: lowStockEpis.filter((epi) => epi.stock <= epi.minimumStock).length,
         activeEquipments,
         openMaintenances,
-        pendingChecklists,
-        duePreventiveAlerts
+        pendingChecklists
       },
       recentMaintenances,
       recentChecklistProblems,

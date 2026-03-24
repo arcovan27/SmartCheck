@@ -10,7 +10,6 @@ type DashboardResponse = {
     activeEquipments: number;
     openMaintenances: number;
     pendingChecklists: number;
-    duePreventiveAlerts: number;
   };
 };
 
@@ -50,8 +49,12 @@ export function DashboardPage() {
     },
     { label: "Equipamentos Ativos", value: cards.activeEquipments, tone: "text-cyan-700" },
     { label: "Manutencoes em Aberto", value: cards.openMaintenances, tone: "text-red-700" },
-    { label: "Checklists Pendentes", value: cards.pendingChecklists, tone: "text-amber-700" },
-    { label: "Alertas Preventivos", value: cards.duePreventiveAlerts, tone: "text-orange-700" }
+    {
+      label: "Checklists Pendentes",
+      value: cards.pendingChecklists,
+      tone: "text-amber-700",
+      to: "/execucao-checklist?filtro=pendentes"
+    }
   ];
 
   return (
