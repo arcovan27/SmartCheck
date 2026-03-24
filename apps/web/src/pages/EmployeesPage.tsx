@@ -163,7 +163,10 @@ export function EmployeesPage() {
         method: "POST",
         body: JSON.stringify({ employeeId, provider: "UAREU_4500" })
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employees"] })
+    onSuccess: () => {
+      setActionMessage("Vinculo biometrico iniciado. Informe o ID e confirme.");
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+    }
   });
 
   const finishBiometric = useMutation({
@@ -177,6 +180,7 @@ export function EmployeesPage() {
         })
       }),
     onSuccess: () => {
+      setActionMessage("Biometria vinculada com sucesso.");
       setBiometricExternalId("");
       queryClient.invalidateQueries({ queryKey: ["employees"] });
       if (selectedId) queryClient.invalidateQueries({ queryKey: ["employee-details", selectedId] });
@@ -305,10 +309,21 @@ export function EmployeesPage() {
           </div>
         )}
 
-        {(actionMessage || statusMutation.isError || deleteMutation.isError || enrollWithAgent.isError) && (
+        {(actionMessage ||
+          statusMutation.isError ||
+          deleteMutation.isError ||
+          enrollWithAgent.isError ||
+          startBiometric.isError ||
+          finishBiometric.isError ||
+          deleteBiometric.isError) && (
           <div
             className={`rounded-xl p-3 text-sm ${
-              statusMutation.isError || deleteMutation.isError || enrollWithAgent.isError
+              statusMutation.isError ||
+              deleteMutation.isError ||
+              enrollWithAgent.isError ||
+              startBiometric.isError ||
+              finishBiometric.isError ||
+              deleteBiometric.isError
                 ? "bg-red-50 text-red-700"
                 : "bg-emerald-50 text-emerald-700"
             }`}
@@ -319,6 +334,12 @@ export function EmployeesPage() {
                 ? (statusMutation.error as Error).message
                 : enrollWithAgent.isError
                   ? `${(enrollWithAgent.error as Error).message}. Inicie o agente no Windows e tente novamente.`
+                  : startBiometric.isError
+                    ? (startBiometric.error as Error).message
+                    : finishBiometric.isError
+                      ? (finishBiometric.error as Error).message
+                      : deleteBiometric.isError
+                        ? (deleteBiometric.error as Error).message
                 : actionMessage}
           </div>
         )}
@@ -507,12 +528,17 @@ export function EmployeesPage() {
                 type="button"
                 className="btn-primary"
                 onClick={() => enrollWithAgent.mutate(selectedEmployee.id)}
-                disabled={enrollWithAgent.isPending}
+                disabled={enrollWithAgent.isPending || finishBiometric.isPending || startBiometric.isPending}
               >
                 {enrollWithAgent.isPending ? "Lendo digital no agente..." : "Cadastrar biometria via agente Windows"}
               </button>
-              <button type="button" className="btn-secondary" onClick={() => startBiometric.mutate(selectedEmployee.id)}>
-                Iniciar vinculo biometrico
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => startBiometric.mutate(selectedEmployee.id)}
+                disabled={startBiometric.isPending || enrollWithAgent.isPending || finishBiometric.isPending}
+              >
+                {startBiometric.isPending ? "Iniciando vinculo..." : "Iniciar vinculo biometrico"}
               </button>
               <input
                 className="input"
@@ -524,9 +550,9 @@ export function EmployeesPage() {
                 type="button"
                 className="btn-primary"
                 onClick={() => finishBiometric.mutate(selectedEmployee.id)}
-                disabled={!biometricExternalId || finishBiometric.isPending}
+                disabled={!biometricExternalId || finishBiometric.isPending || enrollWithAgent.isPending}
               >
-                Confirmar biometria vinculada
+                {finishBiometric.isPending ? "Confirmando biometria..." : "Confirmar biometria vinculada"}
               </button>
               <button type="button" className="btn-danger" onClick={() => deleteBiometric.mutate(selectedEmployee.id)}>
                 Remover biometria
