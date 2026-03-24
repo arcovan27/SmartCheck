@@ -1,12 +1,25 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL, apiRequest } from "../lib/api";
+
+const defaultPrintTerm =
+  "Recebi da Empresa Acima, os EPI's abaixo relacionados, que sao fornecidos gratuitamente nos termos do Art 166 da C.L.T e item 6.2.1.2 da NR-6 da portaria 3.214 de 08/06/78, declaro ainda estar ciente que de acordo com art. 158, Paragrafo unico, letra \"b\" da CLT e item 6.3 da NR-6 da mesma portaria, que devo usar, obrigatoriamente estes EPI's durante toda jornada de trabalho, responsabilizar-me pela sua guarda e conservacao, comunicar ao Dep. De Pessoal, qualquer alteracao que os tornem danificados ou extraviados. Atesto ainda estar orientado e treinado da utilizacao correta destes EPI's abaixo relacionados.";
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 export function EntregaEpiPage() {
   const queryClient = useQueryClient();
   const biometricAgentUrl = import.meta.env.VITE_BIOMETRIC_AGENT_URL ?? "http://127.0.0.1:4100";
   const [actionMessage, setActionMessage] = useState("");
   const [isReadingFingerprint, setIsReadingFingerprint] = useState(false);
+  const [printTerm, setPrintTerm] = useState(defaultPrintTerm);
   const [deliveryForm, setDeliveryForm] = useState({
     employeeId: "",
     epiId: "",
@@ -19,6 +32,17 @@ export function EntregaEpiPage() {
     employeeSignatureName: ""
   });
   const [reportEmployeeId, setReportEmployeeId] = useState("");
+
+  useEffect(() => {
+    const savedTerm = localStorage.getItem("smartcheck.epi.printTerm");
+    if (savedTerm) {
+      setPrintTerm(savedTerm);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("smartcheck.epi.printTerm", printTerm);
+  }, [printTerm]);
 
   const employeesQuery = useQuery({ queryKey: ["employees"], queryFn: () => apiRequest<any[]>("/employees") });
   const episQuery = useQuery({ queryKey: ["epis"], queryFn: () => apiRequest<any[]>("/epis") });
@@ -139,6 +163,79 @@ export function EntregaEpiPage() {
       setIsReadingFingerprint(false);
       setActionMessage((error as Error).message);
     }
+  }
+
+  function printEmployeeCopy() {
+    if (!reportQuery.data) return;
+
+    const employee = reportQuery.data.employee;
+    const deliveries = reportQuery.data.deliveries ?? [];
+    const rows = deliveries
+      .map(
+        (item: any) => `
+          <tr>
+            <td>${escapeHtml(item.epi?.name ?? "-")}</td>
+            <td>${escapeHtml(item.epi?.ca ?? "-")}</td>
+            <td>${escapeHtml(item.movementType ?? "-")}</td>
+            <td>${escapeHtml(String(item.quantity ?? "-"))}</td>
+            <td>${escapeHtml(new Date(item.date).toLocaleDateString("pt-BR"))}</td>
+          </tr>
+        `
+      )
+      .join("");
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Ficha de entrega de EPI</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 24px; color: #111827; }
+            h1 { margin: 0 0 12px 0; font-size: 20px; }
+            p { margin: 6px 0; line-height: 1.45; }
+            .term { margin: 16px 0; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+            th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; font-size: 13px; }
+            th { background: #f3f4f6; }
+            .sign { margin-top: 48px; display: grid; gap: 8px; }
+            .line { width: 320px; border-top: 1px solid #111827; padding-top: 6px; }
+          </style>
+        </head>
+        <body>
+          <h1>Ficha de entrega de EPI</h1>
+          <p><strong>Funcionario:</strong> ${escapeHtml(employee.name ?? "-")}</p>
+          <p><strong>Matricula:</strong> ${escapeHtml(employee.registration ?? "-")}</p>
+          <p><strong>Setor:</strong> ${escapeHtml(employee.department ?? "-")} | <strong>Funcao:</strong> ${escapeHtml(employee.position ?? "-")}</p>
+          <div class="term">
+            <p><strong>Termo:</strong> ${escapeHtml(printTerm)}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>EPI</th>
+                <th>CA</th>
+                <th>Movimento</th>
+                <th>Quantidade</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows || '<tr><td colspan="5">Sem registros.</td></tr>'}
+            </tbody>
+          </table>
+          <div class="sign">
+            <div class="line">Assinatura do funcionario</div>
+            <div class="line">Assinatura do responsavel</div>
+          </div>
+          <script>
+            window.onload = function() { window.print(); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   }
 
   return (
@@ -288,6 +385,22 @@ export function EntregaEpiPage() {
 
         <section className="card space-y-3">
           <h2 className="section-title">Ficha individual de EPI</h2>
+          <details className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+              Configurar termo de impressao
+            </summary>
+            <div className="mt-3 space-y-2">
+              <textarea
+                className="textarea"
+                rows={7}
+                value={printTerm}
+                onChange={(e) => setPrintTerm(e.target.value)}
+              />
+              <p className="text-xs text-slate-500">
+                Esse texto vai sair na copia impressa da ficha do funcionario.
+              </p>
+            </div>
+          </details>
           <select
             className="select"
             value={reportEmployeeId}
@@ -303,6 +416,9 @@ export function EntregaEpiPage() {
 
           {reportQuery.data && (
             <div className="space-y-2 text-sm">
+              <button type="button" className="btn-secondary" onClick={printEmployeeCopy}>
+                Imprimir copia do funcionario
+              </button>
               <p>
                 Funcionario: <strong>{reportQuery.data.employee.name}</strong> | Matricula:{" "}
                 <strong>{reportQuery.data.employee.registration}</strong> | Setor:{" "}
