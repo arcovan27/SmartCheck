@@ -177,7 +177,7 @@ export function ExecucaoChecklistPage() {
         <p className="text-sm text-slate-500">
           Aqui voce executa o checklist ja cadastrado. Se ainda nao existir, crie o modelo no menu de cadastro.
         </p>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2">
           <select
             className="select"
             value={equipmentId}
@@ -194,12 +194,6 @@ export function ExecucaoChecklistPage() {
               </option>
             ))}
           </select>
-          <input
-            className="input"
-            value={selectedTemplate?.name ?? ""}
-            placeholder={equipmentId ? "Checklist vinculado ao equipamento" : "Selecione um equipamento"}
-            readOnly
-          />
         </div>
         {equipmentId && !selectedTemplate && (
           <p className="text-sm text-amber-700">
