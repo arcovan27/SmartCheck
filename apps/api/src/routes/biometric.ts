@@ -4,6 +4,22 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 
 export async function biometricRoutes(app: FastifyInstance) {
+  app.get("/biometric/templates", { preHandler: [app.authenticate] }, async () => {
+    return prisma.employeeBiometric.findMany({
+      where: {
+        provider: BiometricProvider.UAREU_4500,
+        status: BiometricStatus.CADASTRADA,
+        biometricTemplateId: { not: null }
+      },
+      select: {
+        employeeId: true,
+        biometricExternalId: true,
+        biometricTemplateId: true,
+        updatedAt: true
+      }
+    });
+  });
+
   app.post("/biometric/enroll/start", { preHandler: [app.authenticate] }, async (request, reply) => {
     const body = z
       .object({

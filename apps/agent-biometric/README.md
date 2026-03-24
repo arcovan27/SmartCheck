@@ -45,4 +45,5 @@ No startup, confirme no console/log a versao do build (exemplo: `Agent started (
 
 ## Observacao importante
 
-O template biometrico fica salvo localmente em `C:\ProgramData\SmartCheck\biometric-store.json`. Isso e necessario para a identificacao funcionar de verdade, porque capturas diferentes da mesma digital nao geram uma string identica para consulta direta na API.
+O template biometrico agora e salvo no servidor (campo `biometricTemplateId`), e o agente usa `C:\ProgramData\SmartCheck\biometric-store.json` apenas como cache sincronizado.
+Isso evita perda de biometria ao formatar o PC do agente.

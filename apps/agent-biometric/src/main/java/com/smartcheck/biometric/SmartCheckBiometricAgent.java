@@ -173,8 +173,12 @@ public class SmartCheckBiometricAgent {
                 String responseBody = apiClient.post("/biometric/enroll/finish",
                     "{\"employeeId\":" + quote(request.employeeId)
                         + ",\"provider\":\"UAREU_4500\""
+                        + ",\"biometricTemplateId\":" + quote(captured.base64Fmd)
                         + ",\"biometricExternalId\":" + quote(biometricExternalId)
                         + "}");
+
+                // Keep local cache aligned with server as source of truth.
+                store.syncFromServer(apiClient);
 
                 sendJson(exchange, 201,
                     "{\"message\":\"Biometria cadastrada com sucesso\",\"biometricExternalId\":"
@@ -219,9 +223,11 @@ public class SmartCheckBiometricAgent {
                 require(request.token, "token");
                 logInfo("Identify request accepted");
 
+                ApiClient apiClient = new ApiClient(request.apiBaseUrl, request.token);
                 TemplateStore store = TemplateStore.load();
+                store.syncFromServer(apiClient);
                 if (store.records.isEmpty()) {
-                    throw new IllegalStateException("Nenhuma biometria foi cadastrada neste computador.");
+                    throw new IllegalStateException("Nenhuma biometria cadastrada no servidor.");
                 }
 
                 MatchResult match = FingerprintService.identify(store.records);
@@ -230,9 +236,13 @@ public class SmartCheckBiometricAgent {
                     throw new IllegalStateException("A digital lida pertence a outro funcionario cadastrado neste computador.");
                 }
 
-                ApiClient apiClient = new ApiClient(request.apiBaseUrl, request.token);
-                String apiResponse = apiClient.post("/biometric/identify",
-                    "{\"biometricExternalId\":" + quote(match.record.biometricExternalId) + "}");
+                String identifyPayload;
+                if (match.record.biometricExternalId != null && match.record.biometricExternalId.length() > 0) {
+                    identifyPayload = "{\"biometricExternalId\":" + quote(match.record.biometricExternalId) + "}";
+                } else {
+                    identifyPayload = "{\"biometricTemplateId\":" + quote(match.record.base64Fmd) + "}";
+                }
+                String apiResponse = apiClient.post("/biometric/identify", identifyPayload);
 
                 sendJson(exchange, 200,
                     "{\"message\":\"Biometria identificada com sucesso\","
@@ -636,6 +646,24 @@ public class SmartCheckBiometricAgent {
             logInfo("API POST " + path + " success HTTP " + status);
             return body == null || body.trim().isEmpty() ? "{}" : body.trim();
         }
+
+        String get(String path) throws IOException, ApiException {
+            logInfo("Calling API GET " + baseUrl + path);
+            HttpURLConnection connection = (HttpURLConnection) new URL(baseUrl + path).openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(30000);
+            connection.setRequestProperty("Authorization", "Bearer " + token);
+
+            int status = connection.getResponseCode();
+            String body = readFully(status >= 400 ? connection.getErrorStream() : connection.getInputStream());
+            if (status >= 400) {
+                logError("API GET " + path + " failed HTTP " + status);
+                throw new ApiException(status, firstJsonMessage(body, "Falha ao comunicar com a API principal."));
+            }
+            logInfo("API GET " + path + " success HTTP " + status);
+            return body == null || body.trim().isEmpty() ? "[]" : body.trim();
+        }
     }
 
     private static final class TemplateStore {
@@ -694,6 +722,44 @@ public class SmartCheckBiometricAgent {
             }
             json.append("]");
             Files.write(STORE_PATH, json.toString().getBytes(StandardCharsets.UTF_8));
+        }
+
+        void syncFromServer(ApiClient apiClient) throws IOException, ApiException {
+            String raw = apiClient.get("/biometric/templates");
+            List<TemplateRecord> synced = parseServerTemplates(raw);
+            records.clear();
+            records.addAll(synced);
+            save();
+            logInfo("Template cache synced from server. count=" + records.size());
+        }
+
+        private List<TemplateRecord> parseServerTemplates(String raw) {
+            List<TemplateRecord> items = new ArrayList<TemplateRecord>();
+            if (raw == null || raw.trim().length() < 2) {
+                return items;
+            }
+
+            Matcher matcher = Pattern.compile("\\{(.*?)\\}", Pattern.DOTALL).matcher(raw);
+            while (matcher.find()) {
+                String item = matcher.group();
+                String employeeId = Json.simpleValue(item, "employeeId");
+                String biometricTemplateId = Json.simpleValue(item, "biometricTemplateId");
+                if (employeeId == null || employeeId.length() == 0 || biometricTemplateId == null || biometricTemplateId.length() == 0) {
+                    continue;
+                }
+
+                String biometricExternalId = Json.simpleValue(item, "biometricExternalId");
+                String updatedAt = Json.simpleValue(item, "updatedAt");
+                items.add(new TemplateRecord(
+                    employeeId,
+                    biometricExternalId,
+                    biometricTemplateId,
+                    "SERVER_SYNC",
+                    updatedAt == null ? String.valueOf(System.currentTimeMillis()) : updatedAt
+                ));
+            }
+
+            return items;
         }
     }
 
