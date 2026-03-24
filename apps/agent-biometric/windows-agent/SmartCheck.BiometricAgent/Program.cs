@@ -43,7 +43,7 @@ builder.Services.AddSingleton<IFingerprintService>(sp =>
     var sdkDir = Environment.GetEnvironmentVariable("UAREU_SDK_DLL_DIR") ?? string.Empty;
     if (mode == "dpfp")
     {
-        logger.LogWarning("Modo DPFP forcado detectado. Para U.are.U 4500 o recomendado e SMARTCHECK_BIOMETRIC_MODE=uareu (ou sdk).");
+        logger.LogInformation("Modo DPFP forcado detectado. Usando fluxo automatico do modo sdk.");
         mode = "sdk";
     }
 

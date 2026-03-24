@@ -80,6 +80,9 @@ export function EmployeesPage() {
     () => employeesQuery.data?.find((employee) => employee.id === selectedId) ?? null,
     [employeesQuery.data, selectedId]
   );
+  const selectedEmployeeExternalId = selectedEmployee?.biometric?.biometricExternalId?.trim() ?? "";
+  const effectiveBiometricExternalId = biometricExternalId.trim() || selectedEmployeeExternalId;
+  const isBiometricAlreadyRegistered = selectedEmployee?.biometric?.status === "CADASTRADA";
 
   const employeeDetailsQuery = useQuery({
     queryKey: ["employee-details", selectedId],
@@ -175,7 +178,7 @@ export function EmployeesPage() {
         method: "POST",
         body: JSON.stringify({
           employeeId,
-          biometricExternalId,
+          biometricExternalId: effectiveBiometricExternalId,
           provider: "UAREU_4500"
         })
       }),
@@ -550,9 +553,18 @@ export function EmployeesPage() {
                 type="button"
                 className="btn-primary"
                 onClick={() => finishBiometric.mutate(selectedEmployee.id)}
-                disabled={!biometricExternalId || finishBiometric.isPending || enrollWithAgent.isPending}
+                disabled={
+                  !effectiveBiometricExternalId ||
+                  finishBiometric.isPending ||
+                  enrollWithAgent.isPending ||
+                  (isBiometricAlreadyRegistered && !biometricExternalId.trim())
+                }
               >
-                {finishBiometric.isPending ? "Confirmando biometria..." : "Confirmar biometria vinculada"}
+                {finishBiometric.isPending
+                  ? "Confirmando biometria..."
+                  : isBiometricAlreadyRegistered && !biometricExternalId.trim()
+                    ? "Biometria ja cadastrada"
+                    : "Confirmar biometria vinculada"}
               </button>
               <button type="button" className="btn-danger" onClick={() => deleteBiometric.mutate(selectedEmployee.id)}>
                 Remover biometria
