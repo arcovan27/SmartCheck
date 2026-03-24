@@ -253,20 +253,7 @@ export function ChecklistsPage() {
               <option value="SEMANAL">Semanal</option>
               <option value="MENSAL">Mensal</option>
             </select>
-            <select
-              className="select"
-              value={templateForm.code}
-              onChange={(event) =>
-                setTemplateForm((prev) => ({ ...prev, code: event.target.value as ChecklistCode }))
-              }
-            >
-              <option value="OUTRO">Modelo livre</option>
-              <option value="PRENSA_TUBOS_MANUAL_01">Prensa Tubos Manual 01</option>
-              <option value="PRENSA_TUBOS_MANUAL_02">Prensa Tubos Manual 02</option>
-              <option value="MISTURADOR_MASSA_TUBOS">Misturador Massa de Tubos</option>
-              <option value="PA_CARREGADEIRA">Pa Carregadeira</option>
-              <option value="EMPILHADEIRA_SEMANAL">Empilhadeira</option>
-            </select>
+            <input className="input" value="Modelo livre" disabled />
           </div>
           <textarea
             className="textarea"
