@@ -211,52 +211,65 @@ app.MapPost("/enroll", async (EnrollRequest request, IFingerprintService fingerp
     }
 });
 
-app.MapPost("/identify", async (IdentifyRequest request, IFingerprintService fingerprintService, IAgentApiClient apiClient, TemplateStore templateStore, CancellationToken ct) =>
+app.MapPost("/identify", async (IdentifyRequest request, IFingerprintService fingerprintService, IAgentApiClient apiClient, TemplateStore templateStore, ILoggerFactory loggerFactory, CancellationToken ct) =>
 {
-    if (string.IsNullOrWhiteSpace(request.Token))
+    var logger = loggerFactory.CreateLogger("IdentifyEndpoint");
+    try
     {
-        return Results.BadRequest(new { message = "token e obrigatorio" });
-    }
-
-    if (string.IsNullOrWhiteSpace(request.ApiBaseUrl))
-    {
-        return Results.BadRequest(new { message = "apiBaseUrl e obrigatorio" });
-    }
-
-    var biometricExternalId = request.BiometricExternalId?.Trim();
-    var biometricTemplateId = request.BiometricTemplateId?.Trim();
-
-    if (string.IsNullOrWhiteSpace(biometricExternalId) && string.IsNullOrWhiteSpace(biometricTemplateId))
-    {
-        var captured = await fingerprintService.CaptureTemplateAsync(ct);
-        biometricTemplateId = captured.TemplateBase64;
-
-        var templates = await templateStore.GetAllAsync(ct);
-        foreach (var template in templates)
+        if (string.IsNullOrWhiteSpace(request.Token))
         {
-            var isMatch = await fingerprintService.IsMatchAsync(captured.TemplateBase64, template.TemplateBase64, ct);
-            if (!isMatch) continue;
-
-            biometricExternalId = template.BiometricExternalId;
-            biometricTemplateId = null;
-            break;
+            return Results.BadRequest(new { message = "token e obrigatorio" });
         }
-    }
 
-    if (string.IsNullOrWhiteSpace(biometricExternalId) && string.IsNullOrWhiteSpace(biometricTemplateId))
+        if (string.IsNullOrWhiteSpace(request.ApiBaseUrl))
+        {
+            return Results.BadRequest(new { message = "apiBaseUrl e obrigatorio" });
+        }
+
+        var biometricExternalId = request.BiometricExternalId?.Trim();
+        var biometricTemplateId = request.BiometricTemplateId?.Trim();
+
+        if (string.IsNullOrWhiteSpace(biometricExternalId) && string.IsNullOrWhiteSpace(biometricTemplateId))
+        {
+            var captured = await fingerprintService.CaptureTemplateAsync(ct);
+            biometricTemplateId = captured.TemplateBase64;
+
+            var templates = await templateStore.GetAllAsync(ct);
+            foreach (var template in templates)
+            {
+                var isMatch = await fingerprintService.IsMatchAsync(captured.TemplateBase64, template.TemplateBase64, ct);
+                if (!isMatch) continue;
+
+                biometricExternalId = template.BiometricExternalId;
+                biometricTemplateId = null;
+                break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(biometricExternalId) && string.IsNullOrWhiteSpace(biometricTemplateId))
+        {
+            return Results.BadRequest(new { message = "Nao foi possivel identificar digital capturada" });
+        }
+
+        var result = await apiClient.PostAsync(
+            request.ApiBaseUrl,
+            "/biometric/identify",
+            request.Token,
+            new { biometricExternalId, biometricTemplateId },
+            ct
+        );
+
+        return Results.Ok(result);
+    }
+    catch (OperationCanceledException)
     {
-        return Results.BadRequest(new { message = "Nao foi possivel identificar digital capturada" });
+        return Results.Problem(statusCode: 499, title: "Identificacao cancelada");
     }
-
-    var result = await apiClient.PostAsync(
-        request.ApiBaseUrl,
-        "/biometric/identify",
-        request.Token,
-        new { biometricExternalId, biometricTemplateId },
-        ct
-    );
-
-    return Results.Ok(result);
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Falha no endpoint /identify");
+        return Results.Problem(statusCode: 500, title: "Falha na identificacao biometrica", detail: ex.Message);
+    }
 });
 
 app.Run();
