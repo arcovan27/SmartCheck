@@ -5,6 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
-    port: 5173
+    port: 5173,
+    allowedHosts: [
+      "arcovan.smartnuvem.com.br",
+      "api.arcovan.smartnuvem.com.br"
+    ]
   }
 });
