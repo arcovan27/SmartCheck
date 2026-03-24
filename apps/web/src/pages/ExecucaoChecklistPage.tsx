@@ -51,6 +51,7 @@ export function ExecucaoChecklistPage() {
   const [notes, setNotes] = useState("");
   const [openedHistoryDetails, setOpenedHistoryDetails] = useState<Record<string, boolean>>({});
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [previewZoomed, setPreviewZoomed] = useState(false);
 
   const equipmentsQuery = useQuery({ queryKey: ["equipments"], queryFn: () => apiRequest<any[]>("/equipments") });
   const templatesQuery = useQuery({
@@ -411,7 +412,10 @@ export function ExecucaoChecklistPage() {
                                           key={attachment.id}
                                           className="block"
                                           type="button"
-                                          onClick={() => setPreviewImageUrl(imageUrl)}
+                                          onClick={() => {
+                                            setPreviewImageUrl(imageUrl);
+                                            setPreviewZoomed(false);
+                                          }}
                                         >
                                           <img
                                             src={imageUrl}
@@ -465,21 +469,23 @@ export function ExecucaoChecklistPage() {
       {previewImageUrl && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setPreviewImageUrl(null)}
+          onClick={() => {
+            setPreviewImageUrl(null);
+            setPreviewZoomed(false);
+          }}
         >
           <div className="relative">
-            <button
-              type="button"
-              className="btn-danger absolute -right-2 -top-2 z-10"
-              onClick={() => setPreviewImageUrl(null)}
-            >
-              Fechar
-            </button>
             <img
               src={previewImageUrl}
               alt="Visualizacao da falha"
-              className="max-h-[90vh] max-w-[90vw] rounded-lg border border-slate-200 bg-white object-contain"
+              className={`rounded-lg border border-slate-200 bg-white object-contain transition ${
+                previewZoomed ? "max-h-none max-w-none scale-[1.8] cursor-zoom-out" : "max-h-[90vh] max-w-[90vw] cursor-zoom-in"
+              }`}
               onClick={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => {
+                event.stopPropagation();
+                setPreviewZoomed((prev) => !prev);
+              }}
             />
           </div>
         </div>
