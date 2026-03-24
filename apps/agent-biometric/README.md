@@ -23,6 +23,12 @@ cd C:\Users\SmartNuvem\Documents\GitHub\SmartCheck\apps\agent-biometric
 .\run-agent.ps1
 ```
 
+Sem PowerShell (duplo clique):
+
+- `run-agent.cmd`: inicia/reinicia o agente sem abrir terminal do Java (usa `javaw`)
+- `install-autostart.cmd`: instala inicializacao automatica no login do Windows
+- `remove-autostart.cmd`: remove a inicializacao automatica
+
 O agente sobe em `http://127.0.0.1:4100`.
 
 Durante captura, o console mostra qual leitor esta sendo testado e o status dele. Cada leitor recebe ate 10 segundos de tentativa antes do agente passar para o proximo.
