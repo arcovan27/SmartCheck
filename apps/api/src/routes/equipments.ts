@@ -128,19 +128,11 @@ export async function equipmentRoutes(app: FastifyInstance) {
 
     try {
       await prisma.$transaction(async (tx) => {
-        const templates = await tx.checklistTemplate.findMany({
+        const executions = await tx.checklistExecution.findMany({
           where: { equipmentId: params.id },
           select: { id: true }
         });
-        const templateIds = templates.map((template) => template.id);
-
-        const executions = await tx.checklistExecution.findMany({
-          where: {
-            OR: [{ equipmentId: params.id }, ...(templateIds.length ? [{ templateId: { in: templateIds } }] : [])]
-          },
-          select: { id: true }
-        });
-        const executionIds = [...new Set(executions.map((execution) => execution.id))];
+        const executionIds = executions.map((execution) => execution.id);
 
         await tx.attachment.deleteMany({
           where: {
@@ -182,22 +174,17 @@ export async function equipmentRoutes(app: FastifyInstance) {
           });
         }
 
-        if (templateIds.length) {
-          await tx.checklistTemplateItem.deleteMany({
-            where: {
-              templateId: {
-                in: templateIds
-              }
-            }
-          });
-        }
-
-        await tx.checklistTemplate.deleteMany({ where: { equipmentId: params.id } });
+        await tx.checklistTemplate.updateMany({
+          where: { equipmentId: params.id },
+          data: { equipmentId: null }
+        });
         await tx.maintenancePlan.deleteMany({ where: { equipmentId: params.id } });
         await tx.equipment.delete({ where: { id: params.id } });
       });
 
-      return reply.send({ message: `Equipamento "${equipment.name}" e histórico vinculado apagados com sucesso.` });
+      return reply.send({
+        message: `Equipamento "${equipment.name}" e histórico vinculado apagados com sucesso. Modelos de checklist foram preservados para reutilização.`
+      });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === "P2025") {

@@ -72,7 +72,7 @@ export function ChecklistsPage() {
       name: form.name,
       code: "OUTRO",
       periodicity: form.periodicity,
-      equipmentId: form.equipmentId,
+      equipmentId: form.equipmentId || null,
       description: form.description || null,
       items: validItems
         .map((item, index) => ({
@@ -144,9 +144,8 @@ export function ChecklistsPage() {
               className="select"
               value={form.equipmentId}
               onChange={(event) => setForm((prev) => ({ ...prev, equipmentId: event.target.value }))}
-              required
             >
-              <option value="">Vincular ao equipamento</option>
+              <option value="">Modelo reutilizavel (todos os equipamentos)</option>
               {equipmentsQuery.data?.map((equipment) => (
                 <option key={equipment.id} value={equipment.id}>
                   {equipment.name}
@@ -234,16 +233,13 @@ export function ChecklistsPage() {
             >
               Adicionar item
             </button>
-            <button className="btn-primary" disabled={saveTemplate.isPending || !equipmentsQuery.data?.length}>
+            <button className="btn-primary" disabled={saveTemplate.isPending}>
               {saveTemplate.isPending ? "Salvando..." : editingTemplateId ? "Salvar alteracoes" : "Salvar modelo de checklist"}
             </button>
             <button type="button" className="btn-secondary" onClick={cancelEdit} disabled={!editingTemplateId}>
               Cancelar edicao
             </button>
           </div>
-          {!equipmentsQuery.data?.length && (
-            <p className="text-sm text-amber-700">Cadastre pelo menos um equipamento para criar um checklist.</p>
-          )}
           {message && <p className="text-sm text-emerald-700">{message}</p>}
           {(saveTemplate.isError || deleteTemplate.isError) && (
             <p className="text-sm text-red-700">
@@ -260,7 +256,7 @@ export function ChecklistsPage() {
             <div key={template.id} className="rounded-xl border border-slate-200 p-3 text-sm">
               <p className="font-semibold">{template.name}</p>
               <p className="text-slate-500">
-                Equipamento: {template.equipment?.name ?? "-"} | Periodicidade: {template.periodicity}
+                Vinculo: {template.equipment?.name ?? "Todos os equipamentos"} | Periodicidade: {template.periodicity}
               </p>
               <p>Itens: {template.items?.length ?? 0}</p>
               <div className="mt-2 flex gap-2">

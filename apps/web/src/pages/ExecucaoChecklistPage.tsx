@@ -55,11 +55,8 @@ export function ExecucaoChecklistPage() {
 
   const equipmentsQuery = useQuery({ queryKey: ["equipments"], queryFn: () => apiRequest<any[]>("/equipments") });
   const templatesQuery = useQuery({
-    queryKey: ["checklist-templates", equipmentId],
-    queryFn: () =>
-      apiRequest<any[]>(
-        equipmentId ? `/checklist-templates?equipmentId=${equipmentId}` : "/checklist-templates"
-      )
+    queryKey: ["checklist-templates-exec"],
+    queryFn: () => apiRequest<any[]>("/checklist-templates")
   });
   const equipmentHistoryQuery = useQuery({
     queryKey: ["equipment-history", equipmentId],

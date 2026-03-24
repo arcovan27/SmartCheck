@@ -67,7 +67,11 @@ export async function checklistRoutes(app: FastifyInstance) {
 
     return prisma.checklistTemplate.findMany({
       where: {
-        equipmentId: query.equipmentId,
+        ...(query.equipmentId
+          ? {
+              OR: [{ equipmentId: query.equipmentId }, { equipmentId: null }]
+            }
+          : {}),
         isActive: query.isActive
       },
       include: {
@@ -85,7 +89,7 @@ export async function checklistRoutes(app: FastifyInstance) {
         code: z.nativeEnum(ChecklistTemplateCode).optional(),
         description: z.string().optional().nullable(),
         periodicity: z.nativeEnum(ChecklistPeriodicity),
-        equipmentId: z.string().cuid(),
+        equipmentId: z.string().cuid().optional().nullable(),
         isActive: z.boolean().optional(),
         items: z
           .array(
@@ -112,7 +116,7 @@ export async function checklistRoutes(app: FastifyInstance) {
         code: body.code ?? ChecklistTemplateCode.OUTRO,
         description: body.description,
         periodicity: body.periodicity,
-        equipmentId: body.equipmentId,
+        equipmentId: body.equipmentId ?? null,
         isActive: body.isActive ?? true,
         items: {
           create: body.items
@@ -133,7 +137,7 @@ export async function checklistRoutes(app: FastifyInstance) {
         code: z.nativeEnum(ChecklistTemplateCode).optional(),
         description: z.string().optional().nullable(),
         periodicity: z.nativeEnum(ChecklistPeriodicity).optional(),
-        equipmentId: z.string().cuid().optional(),
+        equipmentId: z.string().cuid().optional().nullable(),
         isActive: z.boolean().optional(),
         items: z
           .array(
@@ -168,7 +172,7 @@ export async function checklistRoutes(app: FastifyInstance) {
           code: body.code,
           description: body.description,
           periodicity: body.periodicity,
-          equipmentId: body.equipmentId,
+          equipmentId: body.equipmentId === undefined ? undefined : body.equipmentId,
           isActive: body.isActive
         }
       });

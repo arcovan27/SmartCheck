@@ -229,8 +229,8 @@ model ChecklistTemplate {
   name          String
   description   String?
   periodicity   ChecklistPeriodicity
-  equipmentId   String
-  equipment     Equipment            @relation(fields: [equipmentId], references: [id])
+  equipmentId   String?
+  equipment     Equipment?           @relation(fields: [equipmentId], references: [id])
   isActive      Boolean              @default(true)
 
   items         ChecklistTemplateItem[]
