@@ -115,18 +115,11 @@ export function ExecucaoChecklistPage() {
   }
 
   function optionLabels() {
-    if (selectedTemplate?.code === "EMPILHADEIRA_SEMANAL") {
-      return [
-        { value: "OK", label: "N - Normal" },
-        { value: "PROBLEMA", label: "A - Anormal" },
-        { value: "NA", label: "NA" }
-      ] as const;
-    }
     return [
       { value: "OK", label: "OK" },
-      { value: "SEM_USO", label: "I - sem uso" },
-      { value: "PROBLEMA", label: "X - irregular" },
-      { value: "NA", label: "N/A" }
+      { value: "SEM_USO", label: "Sem Uso" },
+      { value: "PROBLEMA", label: "Irregular" },
+      { value: "NA", label: "Nao se aplica" }
     ] as const;
   }
 
