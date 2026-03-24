@@ -236,6 +236,46 @@ export function EmployeesPage() {
     }
   });
 
+  const testIdentifyWithAgent = useMutation({
+    mutationFn: async (employee: Employee) => {
+      const token = localStorage.getItem("smartcheck.token");
+      if (!token) {
+        throw new Error("Sessao expirada. Faca login novamente.");
+      }
+
+      const response = await fetch(`${biometricAgentUrl}/identify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiBaseUrl: API_URL,
+          token
+        })
+      });
+
+      const data = await response.json().catch(() => ({ message: "Falha ao testar biometria" }));
+      if (!response.ok) {
+        throw new Error(data.message ?? "Falha ao testar biometria");
+      }
+
+      return { expectedEmployee: employee, result: data as any };
+    },
+    onSuccess: ({ expectedEmployee, result }) => {
+      const identifiedId = result?.employee?.id as string | undefined;
+      const identifiedName = result?.employee?.name as string | undefined;
+      if (identifiedId && identifiedId === expectedEmployee.id) {
+        setActionMessage(`Teste OK: digital reconheceu ${expectedEmployee.name}.`);
+        return;
+      }
+
+      if (identifiedName) {
+        setActionMessage(`Atencao: digital reconheceu ${identifiedName}, diferente de ${expectedEmployee.name}.`);
+        return;
+      }
+
+      setActionMessage("Teste de biometria executado, mas sem identificacao valida.");
+    }
+  });
+
   function loadEmployee(employee: Employee) {
     setActionMessage("");
     setSelectedId(employee.id);
@@ -318,7 +358,8 @@ export function EmployeesPage() {
           enrollWithAgent.isError ||
           startBiometric.isError ||
           finishBiometric.isError ||
-          deleteBiometric.isError) && (
+          deleteBiometric.isError ||
+          testIdentifyWithAgent.isError) && (
           <div
             className={`rounded-xl p-3 text-sm ${
               statusMutation.isError ||
@@ -326,7 +367,8 @@ export function EmployeesPage() {
               enrollWithAgent.isError ||
               startBiometric.isError ||
               finishBiometric.isError ||
-              deleteBiometric.isError
+              deleteBiometric.isError ||
+              testIdentifyWithAgent.isError
                 ? "bg-red-50 text-red-700"
                 : "bg-emerald-50 text-emerald-700"
             }`}
@@ -343,6 +385,8 @@ export function EmployeesPage() {
                       ? (finishBiometric.error as Error).message
                       : deleteBiometric.isError
                         ? (deleteBiometric.error as Error).message
+                        : testIdentifyWithAgent.isError
+                          ? (testIdentifyWithAgent.error as Error).message
                 : actionMessage}
           </div>
         )}
@@ -531,15 +575,37 @@ export function EmployeesPage() {
                 type="button"
                 className="btn-primary"
                 onClick={() => enrollWithAgent.mutate(selectedEmployee.id)}
-                disabled={enrollWithAgent.isPending || finishBiometric.isPending || startBiometric.isPending}
+                disabled={
+                  enrollWithAgent.isPending ||
+                  finishBiometric.isPending ||
+                  startBiometric.isPending ||
+                  testIdentifyWithAgent.isPending
+                }
               >
                 {enrollWithAgent.isPending ? "Lendo digital no agente..." : "Cadastrar biometria via agente Windows"}
               </button>
               <button
                 type="button"
                 className="btn-secondary"
+                onClick={() => testIdentifyWithAgent.mutate(selectedEmployee)}
+                disabled={
+                  testIdentifyWithAgent.isPending ||
+                  enrollWithAgent.isPending ||
+                  selectedEmployee.biometric?.status !== "CADASTRADA"
+                }
+              >
+                {testIdentifyWithAgent.isPending ? "Testando reconhecimento..." : "Testar reconhecimento biometrico"}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
                 onClick={() => startBiometric.mutate(selectedEmployee.id)}
-                disabled={startBiometric.isPending || enrollWithAgent.isPending || finishBiometric.isPending}
+                disabled={
+                  startBiometric.isPending ||
+                  enrollWithAgent.isPending ||
+                  finishBiometric.isPending ||
+                  testIdentifyWithAgent.isPending
+                }
               >
                 {startBiometric.isPending ? "Iniciando vinculo..." : "Iniciar vinculo biometrico"}
               </button>
@@ -557,6 +623,7 @@ export function EmployeesPage() {
                   !effectiveBiometricExternalId ||
                   finishBiometric.isPending ||
                   enrollWithAgent.isPending ||
+                  testIdentifyWithAgent.isPending ||
                   (isBiometricAlreadyRegistered && !biometricExternalId.trim())
                 }
               >
