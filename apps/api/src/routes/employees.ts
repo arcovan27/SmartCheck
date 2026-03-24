@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import bcrypt from "bcryptjs";
-import { BiometricStatus, Prisma, UserRole } from "@prisma/client";
+import { BiometricStatus, EmployeeOccurrenceType, Prisma, UserRole } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 
@@ -60,6 +60,10 @@ export async function employeeRoutes(app: FastifyInstance) {
           include: { equipment: true, checklistExecution: true },
           orderBy: { openedAt: "desc" },
           take: 30
+        },
+        occurrences: {
+          orderBy: { date: "desc" },
+          take: 100
         }
       }
     });
@@ -292,7 +296,8 @@ export async function employeeRoutes(app: FastifyInstance) {
         biometric: true,
         epiMovements: { select: { id: true }, take: 1 },
         checklistExecutions: { select: { id: true }, take: 1 },
-        maintenances: { select: { id: true }, take: 1 }
+        maintenances: { select: { id: true }, take: 1 },
+        occurrences: { select: { id: true }, take: 1 }
       }
     });
 
@@ -310,7 +315,12 @@ export async function employeeRoutes(app: FastifyInstance) {
       blockingReasons.push("possui usuário vinculado");
     }
 
-    if (employee.epiMovements.length || employee.checklistExecutions.length || employee.maintenances.length) {
+    if (
+      employee.epiMovements.length ||
+      employee.checklistExecutions.length ||
+      employee.maintenances.length ||
+      employee.occurrences.length
+    ) {
       blockingReasons.push("possui histórico operacional");
     }
 
@@ -321,7 +331,8 @@ export async function employeeRoutes(app: FastifyInstance) {
           hasUser: Boolean(employee.user),
           epiMovements: employee.epiMovements.length,
           checklistExecutions: employee.checklistExecutions.length,
-          maintenances: employee.maintenances.length
+          maintenances: employee.maintenances.length,
+          occurrences: employee.occurrences.length
         }
       });
     }
@@ -344,4 +355,66 @@ export async function employeeRoutes(app: FastifyInstance) {
 
     return { message: "Funcionário excluído com sucesso" };
   });
+
+  app.post("/employees/:id/occurrences", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const params = z.object({ id: z.string().cuid() }).parse(request.params);
+    const body = z
+      .object({
+        type: z.nativeEnum(EmployeeOccurrenceType),
+        date: z.coerce.date(),
+        description: z.string().min(3),
+        daysAway: z.number().int().min(0).optional().nullable(),
+        notes: z.string().optional().nullable()
+      })
+      .parse(request.body);
+
+    const employee = await prisma.employee.findUnique({
+      where: { id: params.id },
+      select: { id: true }
+    });
+
+    if (!employee) {
+      return reply.code(404).send({ message: "Funcionario nao encontrado" });
+    }
+
+    const occurrence = await prisma.employeeOccurrence.create({
+      data: {
+        employeeId: params.id,
+        type: body.type,
+        date: body.date,
+        description: body.description,
+        daysAway: body.daysAway ?? null,
+        notes: body.notes ?? null
+      }
+    });
+
+    return reply.code(201).send(occurrence);
+  });
+
+  app.delete(
+    "/employees/:id/occurrences/:occurrenceId",
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const params = z
+        .object({
+          id: z.string().cuid(),
+          occurrenceId: z.string().cuid()
+        })
+        .parse(request.params);
+
+      const occurrence = await prisma.employeeOccurrence.findUnique({
+        where: { id: params.occurrenceId },
+        select: { id: true, employeeId: true }
+      });
+
+      if (!occurrence || occurrence.employeeId !== params.id) {
+        return reply.code(404).send({ message: "Ocorrencia nao encontrada para este funcionario" });
+      }
+
+      await prisma.employeeOccurrence.delete({ where: { id: params.occurrenceId } });
+      return reply.send({ message: "Ocorrencia removida com sucesso" });
+    }
+  );
 }
+
+

@@ -14,6 +14,8 @@ type Employee = {
   phone?: string | null;
   email?: string | null;
   photoPath?: string | null;
+  admissionDate?: string | null;
+  dismissalDate?: string | null;
   isActive: boolean;
   notes?: string | null;
   user?: { id: string; email: string; role: UserRole; isActive: boolean } | null;
@@ -34,6 +36,8 @@ const emptyForm = {
   phone: "",
   email: "",
   photoPath: "",
+  admissionDate: "",
+  dismissalDate: "",
   notes: "",
   isActive: true,
   canLogin: false,
@@ -41,6 +45,13 @@ const emptyForm = {
   loginPassword: "",
   loginRole: "ALMOXARIFADO" as UserRole,
   loginIsActive: true
+};
+
+const occurrenceTypeLabels: Record<string, string> = {
+  ATESTADO_MEDICO: "Atestado médico",
+  FALTA: "Falta",
+  ADVERTENCIA: "Advertência",
+  OUTRO: "Outro"
 };
 
 function biometricStatusLabel(status?: string) {
@@ -58,6 +69,13 @@ export function EmployeesPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState("");
+  const [occurrenceForm, setOccurrenceForm] = useState({
+    type: "OUTRO",
+    date: new Date().toISOString().slice(0, 10),
+    description: "",
+    daysAway: "",
+    notes: ""
+  });
 
   useEffect(() => {
     if (!photoFile) {
@@ -159,6 +177,54 @@ export function EmployeesPage() {
         setForm(emptyForm);
         setPhotoFile(null);
         setPhotoPreviewUrl(null);
+      }
+    }
+  });
+
+  const createOccurrenceMutation = useMutation({
+    mutationFn: (payload: {
+      employeeId: string;
+      type: string;
+      date: string;
+      description: string;
+      daysAway?: number | null;
+      notes?: string | null;
+    }) =>
+      apiRequest(`/employees/${payload.employeeId}/occurrences`, {
+        method: "POST",
+        body: JSON.stringify({
+          type: payload.type,
+          date: payload.date,
+          description: payload.description,
+          daysAway: payload.daysAway ?? null,
+          notes: payload.notes ?? null
+        })
+      }),
+    onSuccess: async () => {
+      setActionMessage("Ocorrencia registrada com sucesso.");
+      setOccurrenceForm({
+        type: "OUTRO",
+        date: new Date().toISOString().slice(0, 10),
+        description: "",
+        daysAway: "",
+        notes: ""
+      });
+      if (selectedId) {
+        await queryClient.invalidateQueries({ queryKey: ["employee-details", selectedId] });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+    }
+  });
+
+  const deleteOccurrenceMutation = useMutation({
+    mutationFn: (payload: { employeeId: string; occurrenceId: string }) =>
+      apiRequest(`/employees/${payload.employeeId}/occurrences/${payload.occurrenceId}`, {
+        method: "DELETE"
+      }),
+    onSuccess: async () => {
+      setActionMessage("Ocorrencia removida com sucesso.");
+      if (selectedId) {
+        await queryClient.invalidateQueries({ queryKey: ["employee-details", selectedId] });
       }
     }
   });
@@ -271,6 +337,8 @@ export function EmployeesPage() {
       phone: employee.phone ?? "",
       email: employee.email ?? "",
       photoPath: employee.photoPath ?? "",
+      admissionDate: employee.admissionDate ? employee.admissionDate.slice(0, 10) : "",
+      dismissalDate: employee.dismissalDate ? employee.dismissalDate.slice(0, 10) : "",
       notes: employee.notes ?? "",
       isActive: employee.isActive,
       canLogin: Boolean(employee.user),
@@ -299,6 +367,8 @@ export function EmployeesPage() {
       phone: form.phone || null,
       email: form.email || null,
       photoPath: form.photoPath || null,
+      admissionDate: form.admissionDate || null,
+      dismissalDate: form.dismissalDate || null,
       notes: form.notes || null,
       userAccess: form.canLogin
         ? {
@@ -354,6 +424,8 @@ export function EmployeesPage() {
         {(actionMessage ||
           statusMutation.isError ||
           deleteMutation.isError ||
+          createOccurrenceMutation.isError ||
+          deleteOccurrenceMutation.isError ||
           enrollWithAgent.isError ||
           deleteBiometric.isError ||
           testIdentifyWithAgent.isError) && (
@@ -361,6 +433,8 @@ export function EmployeesPage() {
             className={`rounded-xl p-3 text-sm ${
               statusMutation.isError ||
               deleteMutation.isError ||
+              createOccurrenceMutation.isError ||
+              deleteOccurrenceMutation.isError ||
               enrollWithAgent.isError ||
               deleteBiometric.isError ||
               testIdentifyWithAgent.isError
@@ -372,6 +446,10 @@ export function EmployeesPage() {
               ? (deleteMutation.error as Error).message
               : statusMutation.isError
                 ? (statusMutation.error as Error).message
+                : createOccurrenceMutation.isError
+                  ? (createOccurrenceMutation.error as Error).message
+                  : deleteOccurrenceMutation.isError
+                    ? (deleteOccurrenceMutation.error as Error).message
                 : enrollWithAgent.isError
                   ? `${(enrollWithAgent.error as Error).message}. Inicie o agente no Windows e tente novamente.`
                   : deleteBiometric.isError
@@ -409,6 +487,13 @@ export function EmployeesPage() {
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" className="btn-secondary" onClick={() => loadEmployee(employee)}>
                   Abrir ficha
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => loadEmployee(employee)}
+                >
+                  Ocorrencias
                 </button>
                 <button
                   type="button"
@@ -498,6 +583,26 @@ export function EmployeesPage() {
               value={form.email}
               onChange={(event) => setForm({ ...form, email: event.target.value })}
             />
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="text-sm text-slate-600">
+              Data de contratacao
+              <input
+                className="input mt-1"
+                type="date"
+                value={form.admissionDate}
+                onChange={(event) => setForm({ ...form, admissionDate: event.target.value })}
+              />
+            </label>
+            <label className="text-sm text-slate-600">
+              Data de desligamento (opcional)
+              <input
+                className="input mt-1"
+                type="date"
+                value={form.dismissalDate}
+                onChange={(event) => setForm({ ...form, dismissalDate: event.target.value })}
+              />
+            </label>
           </div>
           <textarea
             className="textarea"
@@ -652,12 +757,125 @@ export function EmployeesPage() {
           </div>
         )}
 
+        {selectedEmployee && (
+          <div className="space-y-3 rounded-xl border border-slate-200 p-3">
+            <h3 className="font-semibold">Ocorrencias do funcionario</h3>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <select
+                className="select"
+                value={occurrenceForm.type}
+                onChange={(event) =>
+                  setOccurrenceForm((prev) => ({ ...prev, type: event.target.value }))
+                }
+              >
+                <option value="ATESTADO_MEDICO">Atestado médico</option>
+                <option value="FALTA">Falta</option>
+                <option value="ADVERTENCIA">Advertência</option>
+                <option value="OUTRO">Outro</option>
+              </select>
+              <input
+                className="input"
+                type="date"
+                value={occurrenceForm.date}
+                onChange={(event) =>
+                  setOccurrenceForm((prev) => ({ ...prev, date: event.target.value }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
+                min={0}
+                placeholder="Dias afastado (opcional)"
+                value={occurrenceForm.daysAway}
+                onChange={(event) =>
+                  setOccurrenceForm((prev) => ({ ...prev, daysAway: event.target.value }))
+                }
+              />
+            </div>
+            <input
+              className="input"
+              placeholder="Descricao da ocorrencia"
+              value={occurrenceForm.description}
+              onChange={(event) =>
+                setOccurrenceForm((prev) => ({ ...prev, description: event.target.value }))
+              }
+            />
+            <textarea
+              className="textarea"
+              rows={2}
+              placeholder="Observacoes adicionais (opcional)"
+              value={occurrenceForm.notes}
+              onChange={(event) =>
+                setOccurrenceForm((prev) => ({ ...prev, notes: event.target.value }))
+              }
+            />
+            <button
+              type="button"
+              className="btn-primary w-full"
+              onClick={() =>
+                createOccurrenceMutation.mutate({
+                  employeeId: selectedEmployee.id,
+                  type: occurrenceForm.type,
+                  date: occurrenceForm.date,
+                  description: occurrenceForm.description,
+                  daysAway: occurrenceForm.daysAway ? Number(occurrenceForm.daysAway) : null,
+                  notes: occurrenceForm.notes || null
+                })
+              }
+              disabled={
+                createOccurrenceMutation.isPending ||
+                !occurrenceForm.description.trim() ||
+                !occurrenceForm.date
+              }
+            >
+              {createOccurrenceMutation.isPending ? "Registrando..." : "Registrar ocorrencia"}
+            </button>
+
+            <div className="space-y-2">
+              {employeeDetailsQuery.data?.occurrences?.slice(0, 20).map((occurrence: any) => (
+                <div key={occurrence.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">
+                        {occurrenceTypeLabels[occurrence.type] ?? occurrence.type}
+                      </p>
+                      <p className="text-slate-600">
+                        {new Date(occurrence.date).toLocaleDateString("pt-BR")}
+                        {occurrence.daysAway ? ` • ${occurrence.daysAway} dia(s) afastado` : ""}
+                      </p>
+                      <p>{occurrence.description}</p>
+                      {occurrence.notes ? <p className="text-slate-600">{occurrence.notes}</p> : null}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-danger"
+                      onClick={() =>
+                        deleteOccurrenceMutation.mutate({
+                          employeeId: selectedEmployee.id,
+                          occurrenceId: occurrence.id
+                        })
+                      }
+                      disabled={deleteOccurrenceMutation.isPending}
+                    >
+                      Apagar
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {!employeeDetailsQuery.data?.occurrences?.length && (
+                <p className="text-sm text-slate-500">Nenhuma ocorrencia registrada.</p>
+              )}
+            </div>
+          </div>
+        )}
+
         {employeeDetailsQuery.data && (
           <div className="space-y-2 rounded-xl border border-slate-200 p-3">
             <h3 className="font-semibold">Historico operacional do funcionario</h3>
             <p className="text-sm text-slate-600">
               EPIs: {employeeDetailsQuery.data.epiMovements.length} | Checklists executados:{" "}
-              {employeeDetailsQuery.data.checklistExecutions.length} | Ocorrencias/manutencoes relacionadas:{" "}
+              {employeeDetailsQuery.data.checklistExecutions.length} | Ocorrencias:{" "}
+              {employeeDetailsQuery.data.occurrences?.length ?? 0} | Manutencoes relacionadas:{" "}
               {employeeDetailsQuery.data.relatedChecklistMaintenances.length}
             </p>
             <div className="space-y-2">

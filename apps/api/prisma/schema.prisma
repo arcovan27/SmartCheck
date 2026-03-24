@@ -102,6 +102,13 @@ enum MaintenancePlanAlertState {
   DUE
 }
 
+enum EmployeeOccurrenceType {
+  ATESTADO_MEDICO
+  FALTA
+  ADVERTENCIA
+  OUTRO
+}
+
 model Employee {
   id           String             @id @default(cuid())
   name         String
@@ -118,6 +125,7 @@ model Employee {
   notes        String?
   user         User?
   biometric    EmployeeBiometric?
+  occurrences  EmployeeOccurrence[]
 
   checklistExecutions ChecklistExecution[]
   maintenances        Maintenance[]
@@ -125,6 +133,19 @@ model Employee {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model EmployeeOccurrence {
+  id          String                 @id @default(cuid())
+  employeeId  String
+  employee    Employee               @relation(fields: [employeeId], references: [id])
+  type        EmployeeOccurrenceType
+  date        DateTime               @default(now())
+  description String
+  daysAway    Int?
+  notes       String?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
 }
 
 model User {
