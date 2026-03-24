@@ -6,7 +6,8 @@ import {
   ChecklistTemplateCode,
   MaintenancePriority,
   MaintenanceStatus,
-  MaintenanceType
+  MaintenanceType,
+  Prisma
 } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
@@ -132,6 +133,7 @@ export async function checklistRoutes(app: FastifyInstance) {
         code: z.nativeEnum(ChecklistTemplateCode).optional(),
         description: z.string().optional().nullable(),
         periodicity: z.nativeEnum(ChecklistPeriodicity).optional(),
+        equipmentId: z.string().cuid().optional(),
         isActive: z.boolean().optional(),
         items: z
           .array(
@@ -164,6 +166,7 @@ export async function checklistRoutes(app: FastifyInstance) {
           code: body.code,
           description: body.description,
           periodicity: body.periodicity,
+          equipmentId: body.equipmentId,
           isActive: body.isActive,
           items: body.items ? { create: body.items } : undefined
         },
@@ -173,6 +176,29 @@ export async function checklistRoutes(app: FastifyInstance) {
         }
       });
     });
+  });
+
+  app.delete("/checklist-templates/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const params = z.object({ id: z.string().cuid() }).parse(request.params);
+
+    try {
+      await prisma.checklistTemplate.delete({
+        where: { id: params.id }
+      });
+      return reply.send({ message: "Modelo de checklist apagado com sucesso" });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === "P2025") {
+          return reply.code(404).send({ message: "Modelo de checklist nao encontrado" });
+        }
+        if (error.code === "P2003") {
+          return reply
+            .code(409)
+            .send({ message: "Nao e possivel apagar: este modelo ja possui execucoes registradas" });
+        }
+      }
+      throw error;
+    }
   });
 
   app.get("/checklist-executions", { preHandler: [app.authenticate] }, async (request) => {
