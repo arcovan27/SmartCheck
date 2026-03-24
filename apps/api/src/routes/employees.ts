@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { BiometricStatus, Prisma } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import { BiometricStatus, Prisma, UserRole } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 
@@ -103,27 +104,58 @@ export async function employeeRoutes(app: FastifyInstance) {
         dismissalDate: z.coerce.date().optional().nullable(),
         isActive: z.boolean().optional(),
         notes: z.string().optional().nullable(),
-        userId: z.string().cuid().optional().nullable()
+        userId: z.string().cuid().optional().nullable(),
+        userAccess: z
+          .object({
+            enabled: z.boolean(),
+            email: z.string().email().optional(),
+            password: z.string().min(6).optional(),
+            role: z.nativeEnum(UserRole).optional(),
+            isActive: z.boolean().optional()
+          })
+          .optional()
       })
       .parse(request.body);
 
-    const employee = await prisma.employee.create({
-      data: {
-        name: body.name,
-        registration: body.registration,
-        cpf: body.cpf,
-        department: body.department,
-        position: body.position,
-        phone: body.phone,
-        email: body.email,
-        photoPath: body.photoPath,
-        admissionDate: body.admissionDate,
-        dismissalDate: body.dismissalDate,
-        isActive: body.isActive ?? true,
-        notes: body.notes,
-        user: body.userId ? { connect: { id: body.userId } } : undefined
-      },
-      include: { user: true, biometric: true }
+    const employee = await prisma.$transaction(async (tx) => {
+      const createdEmployee = await tx.employee.create({
+        data: {
+          name: body.name,
+          registration: body.registration,
+          cpf: body.cpf,
+          department: body.department,
+          position: body.position,
+          phone: body.phone,
+          email: body.email,
+          photoPath: body.photoPath,
+          admissionDate: body.admissionDate,
+          dismissalDate: body.dismissalDate,
+          isActive: body.isActive ?? true,
+          notes: body.notes,
+          user: body.userId ? { connect: { id: body.userId } } : undefined
+        }
+      });
+
+      if (body.userAccess?.enabled) {
+        if (!body.userAccess.email || !body.userAccess.password || !body.userAccess.role) {
+          throw new Error("Para liberar acesso ao sistema, informe e-mail, senha e perfil.");
+        }
+        const passwordHash = await bcrypt.hash(body.userAccess.password, 10);
+        await tx.user.create({
+          data: {
+            email: body.userAccess.email,
+            passwordHash,
+            role: body.userAccess.role,
+            isActive: body.userAccess.isActive ?? true,
+            employeeId: createdEmployee.id
+          }
+        });
+      }
+
+      return tx.employee.findUniqueOrThrow({
+        where: { id: createdEmployee.id },
+        include: { user: true, biometric: true }
+      });
     });
 
     return reply.code(201).send(employee);
@@ -145,33 +177,98 @@ export async function employeeRoutes(app: FastifyInstance) {
         dismissalDate: z.coerce.date().optional().nullable(),
         isActive: z.boolean().optional(),
         notes: z.string().optional().nullable(),
-        userId: z.string().cuid().optional().nullable()
+        userId: z.string().cuid().optional().nullable(),
+        userAccess: z
+          .object({
+            enabled: z.boolean(),
+            email: z.string().email().optional(),
+            password: z.string().min(6).optional(),
+            role: z.nativeEnum(UserRole).optional(),
+            isActive: z.boolean().optional()
+          })
+          .optional()
       })
       .parse(request.body);
 
-    return prisma.employee.update({
-      where: { id: params.id },
-      data: {
-        name: body.name,
-        registration: body.registration,
-        cpf: body.cpf,
-        department: body.department,
-        position: body.position,
-        phone: body.phone,
-        email: body.email,
-        photoPath: body.photoPath,
-        admissionDate: body.admissionDate,
-        dismissalDate: body.dismissalDate,
-        isActive: body.isActive,
-        notes: body.notes,
-        user:
-          body.userId === undefined
-            ? undefined
-            : body.userId
-              ? { connect: { id: body.userId } }
-              : { disconnect: true }
-      },
-      include: { user: true, biometric: true }
+    return prisma.$transaction(async (tx) => {
+      const existingEmployee = await tx.employee.findUnique({
+        where: { id: params.id },
+        include: { user: true }
+      });
+      if (!existingEmployee) throw new Error("Funcionario nao encontrado.");
+
+      await tx.employee.update({
+        where: { id: params.id },
+        data: {
+          name: body.name,
+          registration: body.registration,
+          cpf: body.cpf,
+          department: body.department,
+          position: body.position,
+          phone: body.phone,
+          email: body.email,
+          photoPath: body.photoPath,
+          admissionDate: body.admissionDate,
+          dismissalDate: body.dismissalDate,
+          isActive: body.isActive,
+          notes: body.notes,
+          user:
+            body.userAccess !== undefined
+              ? undefined
+              : body.userId === undefined
+                ? undefined
+                : body.userId
+                  ? { connect: { id: body.userId } }
+                  : { disconnect: true }
+        }
+      });
+
+      if (body.userAccess !== undefined) {
+        if (body.userAccess.enabled) {
+          if (existingEmployee.user) {
+            const updateData: Prisma.UserUpdateInput = {
+              email: body.userAccess.email ?? existingEmployee.user.email,
+              role: body.userAccess.role ?? existingEmployee.user.role,
+              isActive: body.userAccess.isActive ?? existingEmployee.user.isActive,
+              employee: { connect: { id: params.id } }
+            };
+            if (body.userAccess.password) {
+              updateData.passwordHash = await bcrypt.hash(body.userAccess.password, 10);
+            }
+            await tx.user.update({
+              where: { id: existingEmployee.user.id },
+              data: updateData
+            });
+          } else {
+            if (!body.userAccess.email || !body.userAccess.password || !body.userAccess.role) {
+              throw new Error("Para liberar acesso ao sistema, informe e-mail, senha e perfil.");
+            }
+            const passwordHash = await bcrypt.hash(body.userAccess.password, 10);
+            await tx.user.create({
+              data: {
+                email: body.userAccess.email,
+                passwordHash,
+                role: body.userAccess.role,
+                isActive: body.userAccess.isActive ?? true,
+                employeeId: params.id
+              }
+            });
+          }
+        } else if (existingEmployee.user) {
+          await tx.user.update({
+            where: { id: existingEmployee.user.id },
+            data: {
+              isActive: false,
+              employeeId: null
+            }
+          });
+        }
+      }
+
+      return tx.employee.findUniqueOrThrow({
+        where: { id: params.id },
+        include: { user: true, biometric: true }
+      });
     });
   });
 

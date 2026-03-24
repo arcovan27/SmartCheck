@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL, apiRequest, getUploadedFileUrl, uploadFile } from "../lib/api";
+import { roleLabels } from "../lib/constants";
+import type { UserRole } from "../lib/auth";
 
 type Employee = {
   id: string;
@@ -14,7 +16,7 @@ type Employee = {
   photoPath?: string | null;
   isActive: boolean;
   notes?: string | null;
-  user?: { id: string; email: string } | null;
+  user?: { id: string; email: string; role: UserRole; isActive: boolean } | null;
   biometric?: {
     id: string;
     status: "SEM_BIOMETRIA" | "CADASTRADA" | "PENDENTE";
@@ -33,7 +35,12 @@ const emptyForm = {
   email: "",
   photoPath: "",
   notes: "",
-  isActive: true
+  isActive: true,
+  canLogin: false,
+  loginEmail: "",
+  loginPassword: "",
+  loginRole: "ALMOXARIFADO" as UserRole,
+  loginIsActive: true
 };
 
 function biometricStatusLabel(status?: string) {
@@ -265,7 +272,12 @@ export function EmployeesPage() {
       email: employee.email ?? "",
       photoPath: employee.photoPath ?? "",
       notes: employee.notes ?? "",
-      isActive: employee.isActive
+      isActive: employee.isActive,
+      canLogin: Boolean(employee.user),
+      loginEmail: employee.user?.email ?? "",
+      loginPassword: "",
+      loginRole: employee.user?.role ?? "ALMOXARIFADO",
+      loginIsActive: employee.user?.isActive ?? true
     });
     setPhotoFile(null);
     setPhotoPreviewUrl(null);
@@ -287,7 +299,18 @@ export function EmployeesPage() {
       phone: form.phone || null,
       email: form.email || null,
       photoPath: form.photoPath || null,
-      notes: form.notes || null
+      notes: form.notes || null,
+      userAccess: form.canLogin
+        ? {
+            enabled: true,
+            email: form.loginEmail,
+            password: form.loginPassword || undefined,
+            role: form.loginRole,
+            isActive: form.loginIsActive
+          }
+        : {
+            enabled: false
+          }
     });
   }
 
@@ -528,6 +551,66 @@ export function EmployeesPage() {
             />
             Funcionario ativo
           </label>
+
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.canLogin}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    canLogin: event.target.checked,
+                    loginEmail: event.target.checked ? prev.loginEmail || prev.email : "",
+                    loginPassword: ""
+                  }))
+                }
+              />
+              Pode acessar o sistema
+            </label>
+
+            {form.canLogin && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  className="input"
+                  type="email"
+                  placeholder="E-mail de acesso"
+                  value={form.loginEmail}
+                  onChange={(event) => setForm({ ...form, loginEmail: event.target.value })}
+                  required={form.canLogin}
+                />
+                <input
+                  className="input"
+                  type="password"
+                  placeholder={
+                    selectedEmployee?.user ? "Nova senha (opcional para manter)" : "Senha de acesso (min 6)"
+                  }
+                  value={form.loginPassword}
+                  onChange={(event) => setForm({ ...form, loginPassword: event.target.value })}
+                  required={form.canLogin && !selectedEmployee?.user}
+                />
+                <select
+                  className="select"
+                  value={form.loginRole}
+                  onChange={(event) => setForm({ ...form, loginRole: event.target.value as UserRole })}
+                >
+                  {Object.entries(roleLabels).map(([role, label]) => (
+                    <option key={role} value={role}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={form.loginIsActive}
+                    onChange={(event) => setForm({ ...form, loginIsActive: event.target.checked })}
+                  />
+                  Usuario ativo
+                </label>
+              </div>
+            )}
+          </div>
 
           <button className="btn-primary w-full" disabled={saveMutation.isPending}>
             {saveMutation.isPending ? "Salvando..." : selectedEmployee ? "Salvar alteracoes" : "Cadastrar funcionario"}
