@@ -5,14 +5,15 @@ import { roleLabels } from "../lib/constants";
 
 const dashboardMenu = [
   { to: "/", label: "Dashboard" },
-  { to: "/entrega-epi", label: "Entrega de EPI" }
+  { to: "/entrega-epi", label: "Entrega de EPI" },
+  { to: "/execucao-checklist", label: "Execucao de Checklist" }
 ];
 
 const cadastroMenu = [
   { to: "/funcionarios", label: "Funcionários" },
   { to: "/epi", label: "EPI" },
   { to: "/equipamentos", label: "Equipamentos" },
-  { to: "/checklists", label: "Checklists" },
+  { to: "/checklists", label: "Modelos de Checklist" },
   { to: "/manutencao", label: "Manutenção" }
 ];
 

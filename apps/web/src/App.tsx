@@ -6,6 +6,7 @@ import { ChecklistsPage } from "./pages/ChecklistsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { EmployeesPage } from "./pages/EmployeesPage";
 import { EntregaEpiPage } from "./pages/EntregaEpiPage";
+import { ExecucaoChecklistPage } from "./pages/ExecucaoChecklistPage";
 import { EpiPage } from "./pages/EpiPage";
 import { EquipmentsPage } from "./pages/EquipmentsPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -27,6 +28,7 @@ export default function App() {
           >
             <Route index element={<DashboardPage />} />
             <Route path="entrega-epi" element={<EntregaEpiPage />} />
+            <Route path="execucao-checklist" element={<ExecucaoChecklistPage />} />
             <Route path="funcionarios" element={<EmployeesPage />} />
             <Route path="epi" element={<EpiPage />} />
             <Route path="equipamentos" element={<EquipmentsPage />} />
