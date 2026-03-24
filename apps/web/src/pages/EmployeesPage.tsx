@@ -252,9 +252,16 @@ export function EmployeesPage() {
         })
       });
 
-      const data = await response.json().catch(() => ({ message: "Falha ao testar biometria" }));
+      const data = await response
+        .json()
+        .catch(() => ({ message: `Falha ao testar biometria (HTTP ${response.status})` }));
       if (!response.ok) {
-        throw new Error(data.message ?? "Falha ao testar biometria");
+        const message =
+          data?.message ??
+          data?.detail ??
+          data?.title ??
+          `Falha ao testar biometria (HTTP ${response.status})`;
+        throw new Error(message);
       }
 
       return { expectedEmployee: employee, result: data as any };
