@@ -7,6 +7,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
     const [
       activeEmployees,
       totalEpis,
+      lowStockEpis,
       activeEquipments,
       openMaintenances,
       pendingChecklists,
@@ -17,6 +18,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
     ] = await Promise.all([
       prisma.employee.count({ where: { isActive: true } }),
       prisma.epi.count(),
+      prisma.epi.findMany({
+        where: { isActive: true },
+        select: { stock: true, minimumStock: true }
+      }),
       prisma.equipment.count({ where: { isActive: true } }),
       prisma.maintenance.count({ where: { status: { not: MaintenanceStatus.CONCLUIDA } } }),
       prisma.checklistTemplate.count({ where: { isActive: true } }),
@@ -43,6 +48,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       cards: {
         activeEmployees,
         totalEpis,
+        lowStockEpis: lowStockEpis.filter((epi) => epi.stock <= epi.minimumStock).length,
         activeEquipments,
         openMaintenances,
         pendingChecklists,

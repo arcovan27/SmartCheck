@@ -1,5 +1,6 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../lib/api";
 
 type Epi = {
@@ -29,11 +30,17 @@ const epiFormInitial = {
 
 export function EpiPage() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [epiForm, setEpiForm] = useState(epiFormInitial);
   const [editingEpiId, setEditingEpiId] = useState<string | null>(null);
   const [epiActionMessage, setEpiActionMessage] = useState("");
 
   const episQuery = useQuery({ queryKey: ["epis"], queryFn: () => apiRequest<Epi[]>("/epis") });
+  const showLowStockFocus = searchParams.get("filtro") === "estoque-minimo";
+  const lowStockEpis = useMemo(
+    () => (episQuery.data ?? []).filter((epi) => epi.isActive && epi.stock <= epi.minimumStock),
+    [episQuery.data]
+  );
 
   const createEpi = useMutation({
     mutationFn: (payload: any) => apiRequest("/epis", { method: "POST", body: JSON.stringify(payload) }),
@@ -120,6 +127,30 @@ export function EpiPage() {
 
   return (
     <div className="space-y-4">
+      {showLowStockFocus && (
+        <section className="card border border-red-200 bg-red-50">
+          <h2 className="section-title mb-2 text-red-800">EPIs em estoque minimo</h2>
+          {lowStockEpis.length === 0 ? (
+            <p className="text-sm text-emerald-700">Sem itens em alerta no momento.</p>
+          ) : (
+            <div className="space-y-2">
+              {lowStockEpis.map((epi) => (
+                <div key={`alert-${epi.id}`} className="rounded-xl border border-red-200 bg-white p-3 text-sm">
+                  <p className="font-semibold text-red-800">{epi.name}</p>
+                  <p className="text-slate-600">
+                    CA {epi.ca} | {epi.category}
+                  </p>
+                  <p>
+                    Estoque atual: <strong>{epi.stock}</strong> ({epi.unit}) | Minimo:{" "}
+                    <strong>{epi.minimumStock}</strong>
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       <form onSubmit={submitEpi} className="card space-y-2">
         <h2 className="section-title">{editingEpiId ? "Edicao de EPI" : "Cadastro de EPI"}</h2>
         <input
@@ -223,7 +254,12 @@ export function EpiPage() {
         <h2 className="section-title mb-3">EPIs cadastrados</h2>
         <div className="space-y-2">
           {episQuery.data?.map((epi) => (
-            <div key={epi.id} className="rounded-xl border border-slate-200 p-3 text-sm">
+            <div
+              key={epi.id}
+              className={`rounded-xl border p-3 text-sm ${
+                epi.stock <= epi.minimumStock ? "border-red-200 bg-red-50/50" : "border-slate-200"
+              }`}
+            >
               <p className="font-semibold">{epi.name}</p>
               <p className="text-slate-500">
                 CA {epi.ca} | {epi.category}
