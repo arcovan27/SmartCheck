@@ -20,6 +20,52 @@ type BrasilApiCompany = {
   cep?: string;
 };
 
+type CnpjWsCompany = {
+  razao_social?: string;
+  estabelecimento?: {
+    nome_fantasia?: string;
+    email?: string;
+    telefone1?: string;
+    logradouro?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: { nome?: string };
+    estado?: { sigla?: string };
+    cep?: string;
+  };
+};
+
+function mapBrasilApiToCompany(data: BrasilApiCompany, fallbackCnpj: string) {
+  const addressParts = [data.logradouro, data.numero, data.bairro].filter(Boolean);
+  return {
+    legalName: data.razao_social ?? "",
+    tradeName: data.nome_fantasia ?? "",
+    cnpj: data.cnpj ?? fallbackCnpj,
+    email: data.email ?? "",
+    phone: data.ddd_telefone_1 ?? "",
+    addressLine: addressParts.join(", "),
+    city: data.municipio ?? "",
+    state: data.uf ?? "",
+    zipCode: data.cep ?? ""
+  };
+}
+
+function mapCnpjWsToCompany(data: CnpjWsCompany, fallbackCnpj: string) {
+  const est = data.estabelecimento;
+  const addressParts = [est?.logradouro, est?.numero, est?.bairro].filter(Boolean);
+  return {
+    legalName: data.razao_social ?? "",
+    tradeName: est?.nome_fantasia ?? "",
+    cnpj: fallbackCnpj,
+    email: est?.email ?? "",
+    phone: est?.telefone1 ?? "",
+    addressLine: addressParts.join(", "),
+    city: est?.cidade?.nome ?? "",
+    state: est?.estado?.sigla ?? "",
+    zipCode: est?.cep ?? ""
+  };
+}
+
 export async function companyRoutes(app: FastifyInstance) {
   app.get("/company", { preHandler: [app.authenticate] }, async () => {
     return prisma.company.findFirst({ orderBy: { createdAt: "asc" } });
@@ -83,36 +129,46 @@ export async function companyRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "CNPJ invalido" });
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 7000);
-
     try {
-      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, {
-        signal: controller.signal
-      });
-
-      if (!response.ok) {
-        return reply.code(404).send({ message: "Nao foi possivel consultar este CNPJ" });
+      // 1) Tenta BrasilAPI primeiro
+      {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 7000);
+        try {
+          const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, {
+            signal: controller.signal
+          });
+          if (response.ok) {
+            const data = (await response.json()) as BrasilApiCompany;
+            return mapBrasilApiToCompany(data, cnpj);
+          }
+        } finally {
+          clearTimeout(timeout);
+        }
       }
 
-      const data = (await response.json()) as BrasilApiCompany;
-      const addressParts = [data.logradouro, data.numero, data.bairro].filter(Boolean);
+      // 2) Fallback CNPJ.WS
+      {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 7000);
+        try {
+          const response = await fetch(`https://publica.cnpj.ws/cnpj/${cnpj}`, {
+            signal: controller.signal
+          });
+          if (response.ok) {
+            const data = (await response.json()) as CnpjWsCompany;
+            return mapCnpjWsToCompany(data, cnpj);
+          }
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
 
-      return {
-        legalName: data.razao_social ?? "",
-        tradeName: data.nome_fantasia ?? "",
-        cnpj: data.cnpj ?? cnpj,
-        email: data.email ?? "",
-        phone: data.ddd_telefone_1 ?? "",
-        addressLine: addressParts.join(", "),
-        city: data.municipio ?? "",
-        state: data.uf ?? "",
-        zipCode: data.cep ?? ""
-      };
+      return reply.code(404).send({
+        message: "Nao foi possivel consultar este CNPJ nas bases automaticas. Preencha manualmente."
+      });
     } catch {
       return reply.code(502).send({ message: "Falha ao consultar CNPJ no servico externo" });
-    } finally {
-      clearTimeout(timeout);
     }
   });
 }
