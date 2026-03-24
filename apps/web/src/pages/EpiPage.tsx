@@ -16,6 +16,13 @@ type Epi = {
   isActive: boolean;
 };
 
+type EpiMovement = {
+  epiId: string;
+  movementType: "ENTREGA" | "DEVOLUCAO";
+  quantity: number;
+  date: string;
+};
+
 const epiFormInitial = {
   name: "",
   description: "",
@@ -36,11 +43,40 @@ export function EpiPage() {
   const [epiActionMessage, setEpiActionMessage] = useState("");
 
   const episQuery = useQuery({ queryKey: ["epis"], queryFn: () => apiRequest<Epi[]>("/epis") });
+  const movementsQuery = useQuery({
+    queryKey: ["epi-deliveries-for-purchase"],
+    queryFn: () => apiRequest<EpiMovement[]>("/epi-deliveries")
+  });
   const showLowStockFocus = searchParams.get("filtro") === "estoque-minimo";
   const lowStockEpis = useMemo(
     () => (episQuery.data ?? []).filter((epi) => epi.isActive && epi.stock <= epi.minimumStock),
     [episQuery.data]
   );
+
+  const consumptionByEpi = useMemo(() => {
+    const map = new Map<string, { net30Days: number; avgPerDay: number }>();
+    const now = new Date();
+    const periodDays = 30;
+    const windowStart = new Date(now);
+    windowStart.setDate(now.getDate() - periodDays);
+
+    for (const movement of movementsQuery.data ?? []) {
+      const movementDate = new Date(movement.date);
+      if (movementDate < windowStart) continue;
+
+      const current = map.get(movement.epiId) ?? { net30Days: 0, avgPerDay: 0 };
+      const delta = movement.movementType === "ENTREGA" ? movement.quantity : -movement.quantity;
+      current.net30Days += delta;
+      map.set(movement.epiId, current);
+    }
+
+    for (const [epiId, value] of map.entries()) {
+      const net = Math.max(value.net30Days, 0);
+      map.set(epiId, { net30Days: net, avgPerDay: net / periodDays });
+    }
+
+    return map;
+  }, [movementsQuery.data]);
 
   function generatePurchaseList() {
     const items = lowStockEpis;
@@ -52,7 +88,11 @@ export function EpiPage() {
     const rows = items
       .map((epi) => {
         const status = epi.stock === 0 ? "ZERADO" : "ESTOQUE MINIMO";
-        const suggestedQty = Math.max(epi.minimumStock - epi.stock, 1);
+        const consumption = consumptionByEpi.get(epi.id) ?? { net30Days: 0, avgPerDay: 0 };
+        const targetDays = 30;
+        const targetByConsumption = Math.ceil(consumption.avgPerDay * targetDays);
+        const targetStock = Math.max(epi.minimumStock, targetByConsumption);
+        const suggestedQty = Math.max(targetStock - epi.stock, 0);
         return `
           <tr>
             <td>${epi.name}</td>
@@ -60,6 +100,7 @@ export function EpiPage() {
             <td>${epi.category}</td>
             <td>${epi.stock}</td>
             <td>${epi.minimumStock}</td>
+            <td>${consumption.net30Days}</td>
             <td>${status}</td>
             <td>${suggestedQty}</td>
           </tr>
@@ -94,6 +135,7 @@ export function EpiPage() {
                 <th>Categoria</th>
                 <th>Estoque atual</th>
                 <th>Estoque minimo</th>
+                <th>Consumo 30 dias</th>
                 <th>Status</th>
                 <th>Sugestao compra</th>
               </tr>
