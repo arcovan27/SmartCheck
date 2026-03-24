@@ -211,7 +211,8 @@ export function EmployeesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           apiBaseUrl: API_URL,
-          token
+          token,
+          employeeId: employee.id
         })
       });
 

@@ -238,15 +238,28 @@ app.MapPost("/identify", async (IdentifyRequest request, IFingerprintService fin
             return Results.BadRequest(new { message = "apiBaseUrl e obrigatorio" });
         }
 
+        var employeeId = request.EmployeeId?.Trim();
         var biometricExternalId = request.BiometricExternalId?.Trim();
         var biometricTemplateId = request.BiometricTemplateId?.Trim();
 
+        var localCaptureFlow = false;
         if (string.IsNullOrWhiteSpace(biometricExternalId) && string.IsNullOrWhiteSpace(biometricTemplateId))
         {
+            localCaptureFlow = true;
             var captured = await fingerprintService.CaptureTemplateAsync(ct);
-            biometricTemplateId = captured.TemplateBase64;
-
             var templates = await templateStore.GetAllAsync(ct);
+            if (!string.IsNullOrWhiteSpace(employeeId))
+            {
+                templates = templates
+                    .Where(item => string.Equals(item.EmployeeId, employeeId, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            logger.LogInformation(
+                "Iniciando identificacao local com {Count} templates salvos.{EmployeeScope}",
+                templates.Count,
+                string.IsNullOrWhiteSpace(employeeId) ? string.Empty : $" Escopo employeeId={employeeId}"
+            );
             foreach (var template in templates)
             {
                 var isMatch = await fingerprintService.IsMatchAsync(captured.TemplateBase64, template.TemplateBase64, ct);
@@ -256,11 +269,25 @@ app.MapPost("/identify", async (IdentifyRequest request, IFingerprintService fin
                 biometricTemplateId = null;
                 break;
             }
+
+            if (string.IsNullOrWhiteSpace(biometricExternalId))
+            {
+                logger.LogWarning(
+                    "Digital capturada, mas sem correspondencia local nos templates salvos.{EmployeeScope}",
+                    string.IsNullOrWhiteSpace(employeeId) ? string.Empty : $" Escopo employeeId={employeeId}"
+                );
+            }
         }
 
         if (string.IsNullOrWhiteSpace(biometricExternalId) && string.IsNullOrWhiteSpace(biometricTemplateId))
         {
-            return Results.BadRequest(new { message = "Nao foi possivel identificar digital capturada" });
+            return Results.NotFound(new { message = "Biometria nao identificada no agente local" });
+        }
+
+        // No fluxo de captura local, so enviamos para API quando houver externalId identificado pelo agente.
+        if (localCaptureFlow && string.IsNullOrWhiteSpace(biometricExternalId))
+        {
+            return Results.NotFound(new { message = "Biometria nao identificada" });
         }
 
         var identifyPayload = new Dictionary<string, string>();
@@ -317,6 +344,7 @@ record EnrollRequest(
 record IdentifyRequest(
     string Token,
     string ApiBaseUrl,
+    string? EmployeeId,
     string? BiometricExternalId,
     string? BiometricTemplateId
 );
@@ -419,54 +447,77 @@ sealed class UareuFingerprintService : IFingerprintService
                 return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
             }
 
-            var ansiFormat = Enum.GetValues(fmdFormatType)
-                .Cast<object>()
-                .FirstOrDefault(value => value.ToString()?.Contains("ANSI", StringComparison.OrdinalIgnoreCase) == true)
-                ?? Enum.GetValues(fmdFormatType).Cast<object>().FirstOrDefault();
-
-            if (ansiFormat is null)
-            {
-                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
-            }
-
             var probeBytes = Convert.FromBase64String(probeTemplateBase64);
             var enrolledBytes = Convert.FromBase64String(enrolledTemplateBase64);
-            var probeFmd = TryBuildFmd(fmdType, probeBytes, Convert.ToInt32(ansiFormat));
-            var enrolledFmd = TryBuildFmd(fmdType, enrolledBytes, Convert.ToInt32(ansiFormat));
-            if (probeFmd is null || enrolledFmd is null)
-            {
-                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
-            }
-
+            probeBytes = TryNormalizeToFmdBytes(_assembly, probeBytes, _logger, _sdkDir) ?? probeBytes;
+            enrolledBytes = TryNormalizeToFmdBytes(_assembly, enrolledBytes, _logger, _sdkDir) ?? enrolledBytes;
             var comparison = Activator.CreateInstance(compareType);
-            if (comparison is null)
+            if (comparison is null) return Task.FromResult(false);
+
+            var formatValues = Enum.GetValues(fmdFormatType).Cast<object>().Distinct().ToArray();
+            if (formatValues.Length == 0)
             {
                 return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
             }
 
-            var compareResult = compareMethod.Invoke(comparison, [probeFmd, 0, enrolledFmd, 0]);
-            if (compareResult is null)
+            var denominatorRaw = Environment.GetEnvironmentVariable("SMARTCHECK_MATCH_FAR_DENOMINATOR");
+            var denominator = int.TryParse(denominatorRaw, out var parsedDenominator) && parsedDenominator >= 10
+                ? parsedDenominator
+                : 100;
+            var threshold = int.MaxValue / denominator;
+            var bestScore = int.MaxValue;
+            var attempts = 0;
+
+            foreach (var probeFormat in formatValues)
             {
-                return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
+                var probeFmd = TryBuildFmd(fmdType, probeBytes, Convert.ToInt32(probeFormat));
+                if (probeFmd is null) continue;
+
+                foreach (var enrolledFormat in formatValues)
+                {
+                    var enrolledFmd = TryBuildFmd(fmdType, enrolledBytes, Convert.ToInt32(enrolledFormat));
+                    if (enrolledFmd is null) continue;
+
+                    var compareResult = compareMethod.Invoke(comparison, [probeFmd, 0, enrolledFmd, 0]);
+                    if (compareResult is null) continue;
+                    attempts++;
+
+                    var resultCode = compareResult.GetType()
+                        .GetProperty("ResultCode", BindingFlags.Public | BindingFlags.Instance)
+                        ?.GetValue(compareResult)
+                        ?.ToString();
+                    var scoreObj = compareResult.GetType()
+                        .GetProperty("Score", BindingFlags.Public | BindingFlags.Instance)
+                        ?.GetValue(compareResult);
+                    var score = scoreObj is int parsedScore ? parsedScore : int.MaxValue;
+                    if (score < bestScore) bestScore = score;
+
+                    if (string.Equals(resultCode, "DP_SUCCESS", StringComparison.OrdinalIgnoreCase) && score <= threshold)
+                    {
+                        _logger.LogInformation(
+                            "Match U.are.U confirmado. Score={Score}, Threshold={Threshold}, ProbeFormat={ProbeFormat}, EnrolledFormat={EnrolledFormat}",
+                            score,
+                            threshold,
+                            probeFormat.ToString(),
+                            enrolledFormat.ToString()
+                        );
+                        return Task.FromResult(true);
+                    }
+                }
             }
 
-            var resultCode = compareResult.GetType().GetProperty("ResultCode", BindingFlags.Public | BindingFlags.Instance)?.GetValue(compareResult)?.ToString();
-            if (!string.Equals(resultCode, "DP_SUCCESS", StringComparison.OrdinalIgnoreCase))
-            {
-                return Task.FromResult(false);
-            }
-
-            var scoreObj = compareResult.GetType().GetProperty("Score", BindingFlags.Public | BindingFlags.Instance)?.GetValue(compareResult);
-            if (scoreObj is int score)
-            {
-                var threshold = 0x7fffffff / 100000;
-                return Task.FromResult(score <= threshold);
-            }
-
+            _logger.LogInformation(
+                "Match U.are.U sem correspondencia. BestScore={BestScore}, Threshold={Threshold}, Denominator={Denominator}, Attempts={Attempts}",
+                bestScore == int.MaxValue ? -1 : bestScore,
+                threshold,
+                denominator,
+                attempts
+            );
             return Task.FromResult(false);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Falha no compare U.are.U; fallback para comparacao textual.");
             return Task.FromResult(string.Equals(probeTemplateBase64, enrolledTemplateBase64, StringComparison.Ordinal));
         }
     }
@@ -624,6 +675,7 @@ sealed class UareuFingerprintService : IFingerprintService
             throw new InvalidOperationException($"Tempo limite de captura U.are.U excedido (25s). {details}");
         }
 
+        var rawFidBytes = ExtractBytes(fid);
         var fmdViaX = TryCreateFmdBytesViaXFeatureExtraction(fid, logger, sdkDir);
         if (fmdViaX is not null && fmdViaX.Length > 0)
         {
@@ -634,7 +686,8 @@ sealed class UareuFingerprintService : IFingerprintService
         // Nesses casos usamos bytes brutos da captura e fallback.
         if (engineType is null)
         {
-            var bytesWithoutEngine = ExtractBytes(fid);
+            var bytesWithoutEngine = TryCreateFmdBytesViaXFeatureExtractionFromRaw(rawFidBytes, logger, sdkDir)
+                                     ?? rawFidBytes;
             if (bytesWithoutEngine is not null && bytesWithoutEngine.Length > 0)
             {
                 return bytesWithoutEngine;
@@ -657,7 +710,8 @@ sealed class UareuFingerprintService : IFingerprintService
 
         if (engine is null)
         {
-            var bytesWithoutEngine = ExtractBytes(fid);
+            var bytesWithoutEngine = TryCreateFmdBytesViaXFeatureExtractionFromRaw(rawFidBytes, logger, sdkDir)
+                                     ?? rawFidBytes;
             if (bytesWithoutEngine is not null && bytesWithoutEngine.Length > 0)
             {
                 return bytesWithoutEngine;
@@ -678,23 +732,20 @@ sealed class UareuFingerprintService : IFingerprintService
 
         if (fmdFormat is null)
         {
-            return ExtractBytes(fid);
+            return TryCreateFmdBytesViaXFeatureExtractionFromRaw(rawFidBytes, logger, sdkDir)
+                   ?? rawFidBytes;
         }
 
         var createdFmdBytes = TryCreateFmdBytes(engineType, engine, fid, fmdFormat);
-        var extractedBytes = createdFmdBytes ?? ExtractBytes(fid);
+        var extractedBytes = createdFmdBytes
+                             ?? TryCreateFmdBytesViaXFeatureExtractionFromRaw(rawFidBytes, logger, sdkDir)
+                             ?? rawFidBytes;
         if (extractedBytes is not null && extractedBytes.Length > 0)
         {
             return extractedBytes;
         }
 
-        // Fallback para SDKs que retornam objetos diferentes entre versoes:
-        // se houve captura (fid != null), gera um identificador estavel da sessao
-        // para nao bloquear o cadastro biometrico.
-        logger.LogWarning("U.are.U capturou digital, mas nao foi possivel extrair bytes do template. Aplicando fallback de template.");
-        using var sha = SHA256.Create();
-        var fingerprint = $"{fid.GetType().FullName}|{DateTimeOffset.UtcNow:O}";
-        return sha.ComputeHash(Encoding.UTF8.GetBytes(fingerprint));
+        throw new InvalidOperationException("U.are.U capturou digital, mas nao foi possivel gerar template FMD/FID valido.");
     }
 
     private static IEnumerable<object?[]> BuildCaptureArgumentProfiles(ParameterInfo[] parameters, Assembly assembly, int timeoutMs, IReadOnlyList<int> resolutionCandidates)
@@ -1016,6 +1067,40 @@ sealed class UareuFingerprintService : IFingerprintService
         return null;
     }
 
+    private static byte[]? TryNormalizeToFmdBytes(Assembly assembly, byte[] templateBytes, ILogger logger, string sdkDir)
+    {
+        var fmdType = assembly.GetType("DPUruNet.Fmd");
+        var fmdFormatType = assembly.GetType("DPUruNet.Constants+Formats+Fmd");
+        if (fmdType is null || fmdFormatType is null || templateBytes.Length == 0)
+        {
+            return null;
+        }
+
+        foreach (var format in Enum.GetValues(fmdFormatType).Cast<object>())
+        {
+            var maybeFmd = TryBuildFmd(fmdType, templateBytes, Convert.ToInt32(format));
+            if (maybeFmd is not null)
+            {
+                return templateBytes;
+            }
+        }
+
+        if (templateBytes.Length >= 3
+            && templateBytes[0] == (byte)'F'
+            && templateBytes[1] == (byte)'I'
+            && templateBytes[2] == (byte)'R')
+        {
+            var converted = TryCreateFmdBytesViaXFeatureExtractionFromRaw(templateBytes, logger, sdkDir);
+            if (converted is not null && converted.Length > 0)
+            {
+                logger.LogInformation("Template FIR convertido para FMD via DPXUru para comparacao.");
+                return converted;
+            }
+        }
+
+        return null;
+    }
+
     private static byte[]? TryCreateFmdBytesViaXFeatureExtraction(object fid, ILogger logger, string sdkDir)
     {
         Assembly? xAssembly = AppDomain.CurrentDomain.GetAssemblies()
@@ -1108,6 +1193,108 @@ sealed class UareuFingerprintService : IFingerprintService
         catch (Exception ex)
         {
             logger.LogDebug(ex, "Falha ao converter FID para FMD via DPXUru.");
+        }
+
+        return null;
+    }
+
+    private static byte[]? TryCreateFmdBytesViaXFeatureExtractionFromRaw(byte[]? rawBytes, ILogger logger, string sdkDir)
+    {
+        if (rawBytes is null || rawBytes.Length == 0) return null;
+
+        Assembly? xAssembly = AppDomain.CurrentDomain.GetAssemblies()
+            .FirstOrDefault(asm => string.Equals(asm.GetName().Name, "DPXUru", StringComparison.OrdinalIgnoreCase));
+
+        if (xAssembly is null)
+        {
+            var candidatePaths = new List<string>();
+            if (!string.IsNullOrWhiteSpace(sdkDir))
+            {
+                candidatePaths.Add(Path.Combine(sdkDir, "DPXUru.dll"));
+                candidatePaths.Add(Path.Combine(sdkDir, "Bin", "DPXUru.dll"));
+                candidatePaths.Add(Path.Combine(sdkDir, ".NET", "DPXUru.dll"));
+                candidatePaths.Add(Path.Combine(sdkDir, ".NET", "Bin", "DPXUru.dll"));
+            }
+
+            candidatePaths.Add(Path.Combine(AppContext.BaseDirectory, "DPXUru.dll"));
+            candidatePaths.Add(Path.Combine(AppContext.BaseDirectory, "sdk", "DPXUru.dll"));
+            candidatePaths.Add(Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "DigitalPersona",
+                "U.are.U SDK",
+                "Windows",
+                "Lib",
+                "DotNET",
+                "DPXUru.dll"
+            ));
+
+            foreach (var path in candidatePaths.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!File.Exists(path)) continue;
+                try
+                {
+                    xAssembly = Assembly.LoadFrom(path);
+                    break;
+                }
+                catch
+                {
+                    // tenta proximo caminho
+                }
+            }
+        }
+
+        if (xAssembly is null) return null;
+
+        try
+        {
+            var xFidType = xAssembly.GetType("DPXUru.XFid");
+            var xFeatureType = xAssembly.GetType("DPXUru.XFeatureExtraction");
+            if (xFidType is null || xFeatureType is null) return null;
+
+            var xFid = Activator.CreateInstance(xFidType);
+            if (xFid is null) return null;
+
+            var arrayList = new ArrayList(rawBytes.Cast<object>().ToList());
+            xFidType.GetProperty("Bytes", BindingFlags.Public | BindingFlags.Instance)?.SetValue(xFid, arrayList);
+
+            var xFeature = Activator.CreateInstance(xFeatureType);
+            if (xFeature is null) return null;
+
+            var createMethod = xFeatureType.GetMethod("CreateFmdFromRaw", BindingFlags.Public | BindingFlags.Instance, [xFidType, typeof(string)]);
+            if (createMethod is null) return null;
+
+            var xFmdResult = createMethod.Invoke(xFeature, [xFid, "ANSI"]);
+            if (xFmdResult is null) return null;
+
+            var resultCode = xFmdResult.GetType().GetProperty("ResultCode", BindingFlags.Public | BindingFlags.Instance)?.GetValue(xFmdResult)?.ToString();
+            if (!string.Equals(resultCode, "DP_SUCCESS", StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogDebug("DPXUru CreateFmdFromRaw retornou {ResultCode}.", resultCode ?? "n/a");
+                return null;
+            }
+
+            var xFmd = xFmdResult.GetType().GetProperty("Fmd", BindingFlags.Public | BindingFlags.Instance)?.GetValue(xFmdResult);
+            if (xFmd is null) return null;
+
+            var bytesObj = xFmd.GetType().GetProperty("Bytes", BindingFlags.Public | BindingFlags.Instance)?.GetValue(xFmd);
+            if (bytesObj is IEnumerable values)
+            {
+                var bytes = new List<byte>();
+                foreach (var value in values)
+                {
+                    if (value is null) continue;
+                    bytes.Add(Convert.ToByte(value));
+                }
+
+                if (bytes.Count > 0)
+                {
+                    return bytes.ToArray();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Falha ao converter template bruto para FMD via DPXUru.");
         }
 
         return null;
