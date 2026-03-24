@@ -1,76 +1,48 @@
-# SmartCheck Biometric Agent (Windows/.NET)
+# SmartCheck Biometric Agent (Java)
 
-Agente local Windows em .NET 8 para integrar o leitor U.are.U 4500 mantendo a API local:
-- `GET /health`
-- `POST /enroll`
-- `POST /identify`
+Agente local Windows para integrar o SmartCheck com leitores DigitalPersona U.are.U usando o SDK Java oficial.
 
-## Experiencia para o cliente final
-Depois de gerar o instalador e executar o setup:
-- o agente instala e inicia automaticamente
-- cria atalho no menu iniciar
-- entra na inicializacao automatica do Windows
-- fica pronto para uso sem precisar PowerShell
+## Requisitos
 
-## Gerar instalador (Inno Setup)
-Requisitos:
-- .NET 8 SDK
-- Inno Setup 6 (com `ISCC.exe` no PATH ou instalado em `C:\Program Files (x86)\Inno Setup 6`)
+- Windows com driver/leitor DigitalPersona instalado
+- SDK presente em `C:\Program Files\DigitalPersona\U.are.U SDK\Windows`
+- JRE 8 em `C:\Program Files\Java\jre1.8.0_481`
+- `javac.exe` disponível em `C:\Program Files\Android\Android Studio\jbr\bin\javac.exe`
 
-Comando unico para gerar instalador:
+## Build
 
 ```powershell
-npm run installer -w @smartcheck/agent-biometric
+cd C:\Users\SmartNuvem\Documents\GitHub\SmartCheck\apps\agent-biometric
+.\build.ps1
 ```
 
-Saidas geradas:
-- Publicacao Windows: `apps/agent-biometric/dist/win-x64`
-- Instalador `.exe`: `apps/agent-biometric/dist/installer`
-
-Se quiser apenas publicar sem empacotar:
+## Executar
 
 ```powershell
-npm run publish:win -w @smartcheck/agent-biometric
+cd C:\Users\SmartNuvem\Documents\GitHub\SmartCheck\apps\agent-biometric
+.\run-agent.ps1
 ```
 
-## SDK U.are.U sem configuracao manual no cliente
-No build do instalador, o script tenta embutir automaticamente o SDK (`DPUruNet.dll`) no pacote:
-1. Pasta informada por `-SdkDllDir`
-2. `UAREU_SDK_DLL_DIR`
-3. Pastas comuns em `Program Files`
+O agente sobe em `http://127.0.0.1:4100`.
 
-Em runtime, o agente tambem tenta localizar automaticamente o SDK em:
-- pasta `sdk` ao lado do executavel
-- pasta do proprio agente
-- caminhos comuns do Windows
+Durante captura, o console mostra qual leitor esta sendo testado e o status dele. Cada leitor recebe ate 10 segundos de tentativa antes do agente passar para o proximo.
+Nao execute o sample oficial da DigitalPersona ao mesmo tempo que o agente do SmartCheck, pois dois processos concorrendo pelo leitor podem causar falha nativa.
+O log persistente fica em `C:\ProgramData\SmartCheck\biometric-agent.log`.
 
-## Rodar em desenvolvimento
-```powershell
-npm run dev -w @smartcheck/agent-biometric
-```
-
-Padrao de execucao local:
-- Host: `127.0.0.1`
-- Porta: `4100`
-
-## Variaveis de ambiente (opcionais)
-- `AGENT_HOST` (padrao `127.0.0.1`)
-- `AGENT_PORT` (padrao `4100`)
-- `AGENT_ALLOWED_ORIGINS` (padrao `*`)
-- `SMARTCHECK_BIOMETRIC_MODE` (`sdk` padrao, ou `mock`)
-- `UAREU_SDK_DLL_DIR` (opcional)
-- `AGENT_DATA_DIR` (opcional)
-
-## Endpoint de saude
-```powershell
-Invoke-WebRequest http://127.0.0.1:4100/health -UseBasicParsing | Select-Object -ExpandProperty Content
-```
-
-Retorna `mode`, `sdkReady` e `lastError` para diagnostico rapido.
-
-## Legado (Node)
-Se precisar usar a versao antiga temporariamente:
+Para acompanhar em tempo real:
 
 ```powershell
-npm run dev:legacy-node -w @smartcheck/agent-biometric
+Get-Content C:\ProgramData\SmartCheck\biometric-agent.log -Wait
 ```
+
+No startup, confirme no console/log a versao do build (exemplo: `Agent started (2026-03-24-capture-v2)`), para garantir que o jar atualizado foi carregado.
+
+## Endpoints
+
+- `GET /health`: valida se o processo subiu e lista leitores visiveis
+- `POST /enroll`: inicia cadastro na API, captura a digital, salva template local e finaliza o vinculo
+- `POST /identify`: captura a digital, compara localmente com os templates salvos e consulta a API principal
+
+## Observacao importante
+
+O template biometrico fica salvo localmente em `C:\ProgramData\SmartCheck\biometric-store.json`. Isso e necessario para a identificacao funcionar de verdade, porque capturas diferentes da mesma digital nao geram uma string identica para consulta direta na API.

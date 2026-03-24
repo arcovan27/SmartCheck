@@ -13,7 +13,7 @@ Plataforma web para gestão operacional industrial com foco em checklists, manut
 ## Estrutura
 - `apps/api`: API Fastify + Prisma + upload de anexos
 - `apps/web`: aplicação web responsiva
-- `apps/agent-biometric`: placeholder para agente local Windows/.NET
+- `apps/agent-biometric`: agente local Windows em Java para DigitalPersona U.are.U
 - `docs/reference-form-model.md`: referência de domínio operacional
 
 ## Módulos

@@ -231,8 +231,13 @@ export function EmployeesPage() {
       return { expectedEmployee: employee, result: data as any };
     },
     onSuccess: ({ expectedEmployee, result }) => {
-      const identifiedId = result?.employee?.id as string | undefined;
-      const identifiedName = result?.employee?.name as string | undefined;
+      const identifiedId =
+        (result?.employee?.id as string | undefined) ??
+        (result?.apiResponse?.employee?.id as string | undefined) ??
+        (result?.employeeId as string | undefined);
+      const identifiedName =
+        (result?.employee?.name as string | undefined) ??
+        (result?.apiResponse?.employee?.name as string | undefined);
       if (identifiedId && identifiedId === expectedEmployee.id) {
         setActionMessage(`Teste OK: digital reconheceu ${expectedEmployee.name}.`);
         return;
