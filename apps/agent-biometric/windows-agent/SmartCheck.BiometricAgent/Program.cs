@@ -251,11 +251,22 @@ app.MapPost("/identify", async (IdentifyRequest request, IFingerprintService fin
             return Results.BadRequest(new { message = "Nao foi possivel identificar digital capturada" });
         }
 
+        var identifyPayload = new Dictionary<string, string>();
+        if (!string.IsNullOrWhiteSpace(biometricExternalId))
+        {
+            identifyPayload["biometricExternalId"] = biometricExternalId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(biometricTemplateId))
+        {
+            identifyPayload["biometricTemplateId"] = biometricTemplateId;
+        }
+
         var result = await apiClient.PostAsync(
             request.ApiBaseUrl,
             "/biometric/identify",
             request.Token,
-            new { biometricExternalId, biometricTemplateId },
+            identifyPayload,
             ct
         );
 
