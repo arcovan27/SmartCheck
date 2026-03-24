@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "../lib/api";
+import { API_URL, apiRequest } from "../lib/api";
 
 const epiFormInitial = {
   name: "",
@@ -16,7 +16,10 @@ const epiFormInitial = {
 
 export function EpiPage() {
   const queryClient = useQueryClient();
+  const biometricAgentUrl = import.meta.env.VITE_BIOMETRIC_AGENT_URL ?? "http://127.0.0.1:4100";
   const [epiForm, setEpiForm] = useState(epiFormInitial);
+  const [actionMessage, setActionMessage] = useState("");
+  const [isReadingFingerprint, setIsReadingFingerprint] = useState(false);
   const [deliveryForm, setDeliveryForm] = useState({
     employeeId: "",
     epiId: "",
@@ -60,6 +63,7 @@ export function EpiPage() {
     mutationFn: (payload: any) =>
       apiRequest("/epi-deliveries", { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: () => {
+      setActionMessage("Movimentacao registrada com sucesso.");
       queryClient.invalidateQueries({ queryKey: ["epi-deliveries"] });
       queryClient.invalidateQueries({ queryKey: ["epis"] });
       if (reportEmployeeId) queryClient.invalidateQueries({ queryKey: ["epi-report", reportEmployeeId] });
@@ -83,17 +87,89 @@ export function EpiPage() {
     });
   }
 
-  function submitMovement(event: FormEvent) {
-    event.preventDefault();
-    createMovement.mutate({
-      ...deliveryForm,
-      quantity: Number(deliveryForm.quantity),
-      employeeSignatureName: deliveryForm.employeeSignatureName || selectedEmployee?.name,
-      confirmationBiometricId:
-        deliveryForm.confirmationMethod === "BIOMETRIA"
-          ? deliveryForm.confirmationBiometricId || null
-          : null
+  async function identifyEmployeeWithAgent(employeeId: string) {
+    const token = localStorage.getItem("smartcheck.token");
+    if (!token) {
+      throw new Error("Sessao expirada. Faca login novamente.");
+    }
+
+    const response = await fetch(`${biometricAgentUrl}/identify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        apiBaseUrl: API_URL,
+        token,
+        employeeId
+      })
     });
+
+    const data = await response
+      .json()
+      .catch(() => ({ message: `Falha ao validar biometria (HTTP ${response.status})` }));
+    if (!response.ok) {
+      const message =
+        data?.message ??
+        data?.detail ??
+        data?.title ??
+        `Falha ao validar biometria (HTTP ${response.status})`;
+      throw new Error(message);
+    }
+
+    return {
+      employeeId:
+        (data?.employeeId as string | undefined) ??
+        (data?.employee?.id as string | undefined) ??
+        (data?.apiResponse?.employee?.id as string | undefined),
+      biometricExternalId:
+        (data?.biometricExternalId as string | undefined) ??
+        (data?.apiResponse?.biometric?.biometricExternalId as string | undefined) ??
+        (data?.apiResponse?.biometricExternalId as string | undefined),
+      biometricRecordId:
+        (data?.apiResponse?.biometric?.id as string | undefined) ??
+        (data?.biometricId as string | undefined)
+    };
+  }
+
+  async function submitMovement(event: FormEvent) {
+    event.preventDefault();
+    setActionMessage("");
+
+    try {
+      let confirmationBiometricId: string | null = null;
+
+      if (deliveryForm.confirmationMethod === "BIOMETRIA") {
+        if (!deliveryForm.employeeId) {
+          throw new Error("Selecione o funcionario para validar a biometria.");
+        }
+        setIsReadingFingerprint(true);
+        const identifyResult = await identifyEmployeeWithAgent(deliveryForm.employeeId);
+        setIsReadingFingerprint(false);
+
+        if (!identifyResult.employeeId || identifyResult.employeeId !== deliveryForm.employeeId) {
+          throw new Error("A digital lida nao pertence ao funcionario selecionado.");
+        }
+
+        confirmationBiometricId =
+          identifyResult.biometricExternalId ?? identifyResult.biometricRecordId ?? null;
+        if (!confirmationBiometricId) {
+          throw new Error("Biometria validada, mas sem identificador retornado pelo agente.");
+        }
+
+        setDeliveryForm((prev) => ({ ...prev, confirmationBiometricId: confirmationBiometricId ?? "" }));
+        setActionMessage("Digital validada. Finalizando registro da entrega...");
+      }
+
+      await createMovement.mutateAsync({
+        ...deliveryForm,
+        quantity: Number(deliveryForm.quantity),
+        employeeSignatureName: deliveryForm.employeeSignatureName || selectedEmployee?.name,
+        confirmationBiometricId:
+          deliveryForm.confirmationMethod === "BIOMETRIA" ? confirmationBiometricId : null
+      });
+    } catch (error) {
+      setIsReadingFingerprint(false);
+      setActionMessage((error as Error).message);
+    }
   }
 
   return (
@@ -242,7 +318,13 @@ export function EpiPage() {
           <select
             className="select"
             value={deliveryForm.confirmationMethod}
-            onChange={(e) => setDeliveryForm({ ...deliveryForm, confirmationMethod: e.target.value })}
+            onChange={(e) =>
+              setDeliveryForm({
+                ...deliveryForm,
+                confirmationMethod: e.target.value,
+                confirmationBiometricId: ""
+              })
+            }
           >
             <option value="LOGIN">Assinatura digital do funcionário</option>
             <option value="BIOMETRIA">Confirmação biométrica (agente local)</option>
@@ -252,8 +334,8 @@ export function EpiPage() {
               className="input"
               placeholder="ID biométrico retornado pelo agente"
               value={deliveryForm.confirmationBiometricId}
-              onChange={(e) => setDeliveryForm({ ...deliveryForm, confirmationBiometricId: e.target.value })}
-              required
+              readOnly
+              disabled
             />
           )}
           <input
@@ -270,9 +352,18 @@ export function EpiPage() {
             value={deliveryForm.notes}
             onChange={(e) => setDeliveryForm({ ...deliveryForm, notes: e.target.value })}
           />
-          <button className="btn-primary w-full" disabled={createMovement.isPending}>
-            {createMovement.isPending ? "Salvando..." : "Registrar na ficha de EPI"}
+          <button className="btn-primary w-full" disabled={createMovement.isPending || isReadingFingerprint}>
+            {isReadingFingerprint
+              ? "Lendo digital..."
+              : createMovement.isPending
+                ? "Salvando..."
+                : "Registrar na ficha de EPI"}
           </button>
+          {actionMessage && (
+            <p className={`text-sm ${createMovement.isError ? "text-red-700" : "text-emerald-700"}`}>
+              {actionMessage}
+            </p>
+          )}
           {createMovement.isError && (
             <p className="text-sm text-red-700">{(createMovement.error as Error).message}</p>
           )}

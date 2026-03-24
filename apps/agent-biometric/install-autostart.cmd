@@ -15,6 +15,6 @@ echo   %TARGET_CMD%
 echo   %TARGET_VBS%
 echo.
 echo Na proxima inicializacao do Windows o agente sobe automaticamente.
-
+pause
 exit /b 0
 
