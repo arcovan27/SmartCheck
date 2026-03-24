@@ -19,7 +19,7 @@ type CardItem = {
   value: number;
   tone: string;
   to?: string;
-  helper?: string;
+  isAlert?: boolean;
 };
 
 export function DashboardPage() {
@@ -46,7 +46,7 @@ export function DashboardPage() {
       value: cards.lowStockEpis,
       tone: cards.lowStockEpis > 0 ? "text-red-700" : "text-emerald-700",
       to: "/epi?filtro=estoque-minimo",
-      helper: cards.lowStockEpis > 0 ? "Clique para ver os EPIs em alerta" : "Sem alertas"
+      isAlert: true
     },
     { label: "Equipamentos Ativos", value: cards.activeEquipments, tone: "text-cyan-700" },
     { label: "Manutencoes em Aberto", value: cards.openMaintenances, tone: "text-red-700" },
@@ -65,10 +65,29 @@ export function DashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {cardItems.map((item) => {
             const content = (
-              <div className="card rounded-[24px] border-slate-200 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
-                <p className="text-sm font-medium text-slate-500">{item.label}</p>
-                <p className={`mt-3 text-4xl font-extrabold tracking-tight ${item.tone}`}>{item.value}</p>
-                {item.helper && <p className="mt-2 text-xs text-slate-500">{item.helper}</p>}
+              <div
+                className={`card rounded-[24px] border-slate-200 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ${
+                  item.isAlert && item.value > 0 ? "ring-1 ring-red-200" : ""
+                }`}
+              >
+                <div className="flex min-h-[112px] flex-col justify-between">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium text-slate-500">{item.label}</p>
+                    {item.isAlert && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                          item.value > 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
+                        }`}
+                      >
+                        {item.value > 0 ? "Em alerta" : "Normal"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <p className={`text-4xl font-extrabold tracking-tight ${item.tone}`}>{item.value}</p>
+                    {item.to && <p className="text-xs font-medium text-slate-400">Clique para abrir</p>}
+                  </div>
+                </div>
               </div>
             );
 
