@@ -49,6 +49,7 @@ export function EpiPage() {
     queryKey: ["epi-deliveries-for-purchase"],
     queryFn: () => apiRequest<EpiMovement[]>("/epi-deliveries")
   });
+  const companyQuery = useQuery({ queryKey: ["company"], queryFn: () => apiRequest<any>("/company") });
   const showLowStockFocus = searchParams.get("filtro") === "estoque-minimo";
   const lowStockEpis = useMemo(
     () => (episQuery.data ?? []).filter((epi) => epi.isActive && epi.stock <= epi.minimumStock),
@@ -86,6 +87,8 @@ export function EpiPage() {
       window.alert("Nao ha EPIs em estoque minimo no momento.");
       return;
     }
+    const companyName = companyQuery.data?.tradeName || companyQuery.data?.legalName || "Empresa";
+    const companyCnpj = companyQuery.data?.cnpj ?? "-";
 
     let grandTotal = 0;
     const rows = items
@@ -134,6 +137,7 @@ export function EpiPage() {
         </head>
         <body>
           <h1>Lista de compra de EPI</h1>
+          <p><strong>Empresa:</strong> ${companyName} | <strong>CNPJ:</strong> ${companyCnpj}</p>
           <p>Gerado em: ${new Date().toLocaleString("pt-BR")}</p>
           <table>
             <thead>

@@ -14,6 +14,7 @@ import { maintenanceRoutes } from "./routes/maintenance.js";
 import { uploadRoutes } from "./routes/uploads.js";
 import { biometricRoutes } from "./routes/biometric.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
+import { companyRoutes } from "./routes/company.js";
 
 const app = Fastify({ logger: true });
 
@@ -43,6 +44,7 @@ app.get("/health", async () => ({ status: "ok" }));
 
 await app.register(authRoutes);
 await app.register(dashboardRoutes);
+await app.register(companyRoutes);
 await app.register(employeeRoutes);
 await app.register(epiRoutes);
 await app.register(equipmentRoutes);

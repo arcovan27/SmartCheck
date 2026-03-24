@@ -3,6 +3,7 @@ import { AppLayout } from "./components/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./lib/auth";
 import { ChecklistsPage } from "./pages/ChecklistsPage";
+import { CompanyPage } from "./pages/CompanyPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { EmployeesPage } from "./pages/EmployeesPage";
 import { EntregaEpiPage } from "./pages/EntregaEpiPage";
@@ -29,6 +30,7 @@ export default function App() {
             <Route index element={<DashboardPage />} />
             <Route path="entrega-epi" element={<EntregaEpiPage />} />
             <Route path="execucao-checklist" element={<ExecucaoChecklistPage />} />
+            <Route path="empresa" element={<CompanyPage />} />
             <Route path="funcionarios" element={<EmployeesPage />} />
             <Route path="epi" element={<EpiPage />} />
             <Route path="equipamentos" element={<EquipmentsPage />} />

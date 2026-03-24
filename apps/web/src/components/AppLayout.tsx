@@ -10,11 +10,12 @@ const dashboardMenu = [
 ];
 
 const cadastroMenu = [
-  { to: "/funcionarios", label: "Funcionários" },
+  { to: "/empresa", label: "Empresa" },
+  { to: "/funcionarios", label: "Funcionarios" },
   { to: "/epi", label: "EPI" },
   { to: "/equipamentos", label: "Equipamentos" },
   { to: "/checklists", label: "Modelos de Checklist" },
-  { to: "/manutencao", label: "Manutenção" }
+  { to: "/manutencao", label: "Manutencao" }
 ];
 
 export function AppLayout() {
@@ -26,7 +27,7 @@ export function AppLayout() {
       <aside className="border-b border-slate-200 bg-slate-950 px-5 py-5 text-white lg:min-h-screen lg:border-b-0 lg:border-r lg:border-slate-800">
         <div className="mb-8">
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-300">SmartCheck</p>
-          <h1 className="mt-2 text-3xl font-extrabold leading-tight">Operação Industrial</h1>
+          <h1 className="mt-2 text-3xl font-extrabold leading-tight">Operacao Industrial</h1>
         </div>
 
         <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm shadow-[0_20px_40px_rgba(0,0,0,0.18)]">

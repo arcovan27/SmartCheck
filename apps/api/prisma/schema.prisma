@@ -397,3 +397,18 @@ model Attachment {
 
   createdAt DateTime @default(now())
 }
+
+model Company {
+  id           String   @id @default(cuid())
+  legalName    String
+  tradeName    String?
+  cnpj         String   @unique
+  email        String?
+  phone        String?
+  addressLine  String?
+  city         String?
+  state        String?
+  zipCode      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

@@ -49,6 +49,7 @@ export function EntregaEpiPage() {
 
   const employeesQuery = useQuery({ queryKey: ["employees"], queryFn: () => apiRequest<any[]>("/employees") });
   const episQuery = useQuery({ queryKey: ["epis"], queryFn: () => apiRequest<any[]>("/epis") });
+  const companyQuery = useQuery({ queryKey: ["company"], queryFn: () => apiRequest<any>("/company") });
   const movementsQuery = useQuery({
     queryKey: ["epi-deliveries"],
     queryFn: () => apiRequest<any[]>("/epi-deliveries")
@@ -229,9 +230,8 @@ export function EntregaEpiPage() {
       user?.employee?.name ??
       user?.email ??
       "-";
-    const signedAt = targetDelivery?.employeeConfirmedAt
-      ? new Date(targetDelivery.employeeConfirmedAt).toLocaleString("pt-BR")
-      : "-";
+    const companyName = companyQuery.data?.tradeName || companyQuery.data?.legalName || "Empresa";
+    const companyCnpj = companyQuery.data?.cnpj ?? "-";
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
@@ -255,6 +255,7 @@ export function EntregaEpiPage() {
         </head>
         <body>
           <h1>Ficha de entrega de EPI</h1>
+          <p><strong>Empresa:</strong> ${escapeHtml(companyName)} | <strong>CNPJ:</strong> ${escapeHtml(companyCnpj)}</p>
           <p><strong>Funcionario:</strong> ${escapeHtml(employee.name ?? "-")}</p>
           <p><strong>Matricula:</strong> ${escapeHtml(employee.registration ?? "-")}</p>
           <p><strong>Setor:</strong> ${escapeHtml(employee.department ?? "-")} | <strong>Funcao:</strong> ${escapeHtml(employee.position ?? "-")}</p>
