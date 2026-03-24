@@ -2,6 +2,19 @@ import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL, apiRequest } from "../lib/api";
 
+type Epi = {
+  id: string;
+  name: string;
+  description?: string | null;
+  ca: string;
+  category: string;
+  validityDate?: string | null;
+  unit: string;
+  stock: number;
+  minimumStock: number;
+  isActive: boolean;
+};
+
 const epiFormInitial = {
   name: "",
   description: "",
@@ -18,6 +31,8 @@ export function EpiPage() {
   const queryClient = useQueryClient();
   const biometricAgentUrl = import.meta.env.VITE_BIOMETRIC_AGENT_URL ?? "http://127.0.0.1:4100";
   const [epiForm, setEpiForm] = useState(epiFormInitial);
+  const [editingEpiId, setEditingEpiId] = useState<string | null>(null);
+  const [epiActionMessage, setEpiActionMessage] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [isReadingFingerprint, setIsReadingFingerprint] = useState(false);
   const [deliveryForm, setDeliveryForm] = useState({
@@ -34,7 +49,7 @@ export function EpiPage() {
   const [reportEmployeeId, setReportEmployeeId] = useState("");
 
   const employeesQuery = useQuery({ queryKey: ["employees"], queryFn: () => apiRequest<any[]>("/employees") });
-  const episQuery = useQuery({ queryKey: ["epis"], queryFn: () => apiRequest<any[]>("/epis") });
+  const episQuery = useQuery({ queryKey: ["epis"], queryFn: () => apiRequest<Epi[]>("/epis") });
   const movementsQuery = useQuery({
     queryKey: ["epi-deliveries"],
     queryFn: () => apiRequest<any[]>("/epi-deliveries")
@@ -54,8 +69,35 @@ export function EpiPage() {
   const createEpi = useMutation({
     mutationFn: (payload: any) => apiRequest("/epis", { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: () => {
+      setEpiActionMessage("EPI cadastrado com sucesso.");
       queryClient.invalidateQueries({ queryKey: ["epis"] });
       setEpiForm(epiFormInitial);
+    }
+  });
+
+  const updateEpi = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: any }) =>
+      apiRequest(`/epis/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    onSuccess: () => {
+      setEpiActionMessage("EPI atualizado com sucesso.");
+      queryClient.invalidateQueries({ queryKey: ["epis"] });
+      setEditingEpiId(null);
+      setEpiForm(epiFormInitial);
+    }
+  });
+
+  const deleteEpi = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest<{ message: string }>(`/epis/${id}`, {
+        method: "DELETE"
+      }),
+    onSuccess: (_, deletedId) => {
+      setEpiActionMessage("EPI apagado com sucesso.");
+      queryClient.invalidateQueries({ queryKey: ["epis"] });
+      if (editingEpiId === deletedId) {
+        setEditingEpiId(null);
+        setEpiForm(epiFormInitial);
+      }
     }
   });
 
@@ -79,12 +121,50 @@ export function EpiPage() {
 
   function submitEpi(event: FormEvent) {
     event.preventDefault();
-    createEpi.mutate({
+    setEpiActionMessage("");
+
+    const payload = {
       ...epiForm,
       validityDate: epiForm.validityDate || null,
       stock: Number(epiForm.stock),
       minimumStock: Number(epiForm.minimumStock)
+    };
+
+    if (editingEpiId) {
+      updateEpi.mutate({ id: editingEpiId, payload });
+      return;
+    }
+
+    createEpi.mutate(payload);
+  }
+
+  function startEditEpi(epi: Epi) {
+    setEpiActionMessage("");
+    setEditingEpiId(epi.id);
+    setEpiForm({
+      name: epi.name ?? "",
+      description: epi.description ?? "",
+      ca: epi.ca ?? "",
+      category: epi.category ?? "",
+      validityDate: epi.validityDate ? new Date(epi.validityDate).toISOString().slice(0, 10) : "",
+      unit: epi.unit ?? "UN",
+      stock: Number(epi.stock ?? 0),
+      minimumStock: Number(epi.minimumStock ?? 0),
+      isActive: epi.isActive ?? true
     });
+  }
+
+  function cancelEditEpi() {
+    setEditingEpiId(null);
+    setEpiActionMessage("");
+    setEpiForm(epiFormInitial);
+  }
+
+  function handleDeleteEpi(epi: Epi) {
+    setEpiActionMessage("");
+    const confirmed = window.confirm(`Confirma apagar o EPI "${epi.name}"?`);
+    if (!confirmed) return;
+    deleteEpi.mutate(epi.id);
   }
 
   async function identifyEmployeeWithAgent(employeeId: string) {
@@ -176,7 +256,7 @@ export function EpiPage() {
     <div className="space-y-4">
       <div className="grid gap-4 xl:grid-cols-2">
         <form onSubmit={submitEpi} className="card space-y-2">
-          <h2 className="section-title">Cadastro de EPI</h2>
+          <h2 className="section-title">{editingEpiId ? "Edicao de EPI" : "Cadastro de EPI"}</h2>
           <input
             className="input"
             placeholder="Nome"
@@ -186,7 +266,7 @@ export function EpiPage() {
           />
           <textarea
             className="textarea"
-            placeholder="Descrição"
+            placeholder="Descricao"
             value={epiForm.description}
             onChange={(e) => setEpiForm({ ...epiForm, description: e.target.value })}
             rows={2}
@@ -228,7 +308,7 @@ export function EpiPage() {
               className="input"
               type="number"
               min={0}
-              placeholder="Estoque mínimo"
+              placeholder="Estoque minimo"
               value={epiForm.minimumStock}
               onChange={(e) => setEpiForm({ ...epiForm, minimumStock: Number(e.target.value) })}
               required
@@ -240,9 +320,31 @@ export function EpiPage() {
             value={epiForm.validityDate}
             onChange={(e) => setEpiForm({ ...epiForm, validityDate: e.target.value })}
           />
-          <button className="btn-primary w-full" disabled={createEpi.isPending}>
-            {createEpi.isPending ? "Salvando..." : "Cadastrar EPI"}
-          </button>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button className="btn-primary w-full" disabled={createEpi.isPending || updateEpi.isPending}>
+              {createEpi.isPending || updateEpi.isPending
+                ? "Salvando..."
+                : editingEpiId
+                  ? "Salvar alteracoes"
+                  : "Cadastrar EPI"}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary w-full"
+              onClick={cancelEditEpi}
+              disabled={!editingEpiId || createEpi.isPending || updateEpi.isPending}
+            >
+              Cancelar edicao
+            </button>
+          </div>
+          {epiActionMessage && <p className="text-sm text-emerald-700">{epiActionMessage}</p>}
+          {(createEpi.isError || updateEpi.isError || deleteEpi.isError) && (
+            <p className="text-sm text-red-700">
+              {(createEpi.error as Error)?.message ||
+                (updateEpi.error as Error)?.message ||
+                (deleteEpi.error as Error)?.message}
+            </p>
+          )}
         </form>
 
         <form onSubmit={submitMovement} className="card space-y-2">
@@ -260,7 +362,7 @@ export function EpiPage() {
             }
             required
           >
-            <option value="">Funcionário</option>
+            <option value="">Funcionario</option>
             {employeesQuery.data?.map((employee) => (
               <option key={employee.id} value={employee.id}>
                 {employee.name} ({employee.registration})
@@ -271,7 +373,7 @@ export function EpiPage() {
           {selectedEmployee && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-sm">
               <p>
-                Setor: <strong>{selectedEmployee.department}</strong> | Função:{" "}
+                Setor: <strong>{selectedEmployee.department}</strong> | Funcao:{" "}
                 <strong>{selectedEmployee.position}</strong>
               </p>
             </div>
@@ -297,7 +399,7 @@ export function EpiPage() {
               onChange={(e) => setDeliveryForm({ ...deliveryForm, movementType: e.target.value })}
             >
               <option value="ENTREGA">Entrega</option>
-              <option value="DEVOLUCAO">Devolução</option>
+              <option value="DEVOLUCAO">Devolucao</option>
             </select>
             <input
               className="input"
@@ -326,13 +428,13 @@ export function EpiPage() {
               })
             }
           >
-            <option value="LOGIN">Assinatura digital do funcionário</option>
-            <option value="BIOMETRIA">Confirmação biométrica (agente local)</option>
+            <option value="LOGIN">Assinatura digital do funcionario</option>
+            <option value="BIOMETRIA">Confirmacao biometrica (agente local)</option>
           </select>
           {deliveryForm.confirmationMethod === "BIOMETRIA" && (
             <input
               className="input"
-              placeholder="ID biométrico retornado pelo agente"
+              placeholder="ID biometrico retornado pelo agente"
               value={deliveryForm.confirmationBiometricId}
               readOnly
               disabled
@@ -340,7 +442,7 @@ export function EpiPage() {
           )}
           <input
             className="input"
-            placeholder="Confirmação do funcionário (nome)"
+            placeholder="Confirmacao do funcionario (nome)"
             value={deliveryForm.employeeSignatureName}
             onChange={(e) => setDeliveryForm({ ...deliveryForm, employeeSignatureName: e.target.value })}
             required
@@ -348,7 +450,7 @@ export function EpiPage() {
           <textarea
             className="textarea"
             rows={2}
-            placeholder="Observação"
+            placeholder="Observacao"
             value={deliveryForm.notes}
             onChange={(e) => setDeliveryForm({ ...deliveryForm, notes: e.target.value })}
           />
@@ -381,15 +483,33 @@ export function EpiPage() {
                   CA {epi.ca} | {epi.category}
                 </p>
                 <p>
-                  Estoque: <strong>{epi.stock}</strong> ({epi.unit}) | Mínimo: {epi.minimumStock}
+                  Estoque: <strong>{epi.stock}</strong> ({epi.unit}) | Minimo: {epi.minimumStock}
                 </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => startEditEpi(epi)}
+                    disabled={createEpi.isPending || updateEpi.isPending || deleteEpi.isPending}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-danger"
+                    onClick={() => handleDeleteEpi(epi)}
+                    disabled={createEpi.isPending || updateEpi.isPending || deleteEpi.isPending}
+                  >
+                    {deleteEpi.isPending ? "Apagando..." : "Apagar"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </section>
 
         <section className="card">
-          <h2 className="section-title mb-3">Histórico de movimentações</h2>
+          <h2 className="section-title mb-3">Historico de movimentacoes</h2>
           <div className="space-y-2">
             {movementsQuery.data?.map((movement) => (
               <div key={movement.id} className="rounded-xl border border-slate-200 p-3 text-sm">
@@ -414,7 +534,7 @@ export function EpiPage() {
           value={reportEmployeeId}
           onChange={(e) => setReportEmployeeId(e.target.value)}
         >
-          <option value="">Selecione um funcionário</option>
+          <option value="">Selecione um funcionario</option>
           {employeesQuery.data?.map((employee) => (
             <option key={employee.id} value={employee.id}>
               {employee.name}
@@ -425,13 +545,13 @@ export function EpiPage() {
         {reportQuery.data && (
           <div className="space-y-2 text-sm">
             <p>
-              Funcionário: <strong>{reportQuery.data.employee.name}</strong> | Matrícula:{" "}
+              Funcionario: <strong>{reportQuery.data.employee.name}</strong> | Matricula:{" "}
               <strong>{reportQuery.data.employee.registration}</strong> | Setor:{" "}
-              <strong>{reportQuery.data.employee.department}</strong> | Função:{" "}
+              <strong>{reportQuery.data.employee.department}</strong> | Funcao:{" "}
               <strong>{reportQuery.data.employee.position}</strong>
             </p>
             <p>
-              Admissão:{" "}
+              Admissao:{" "}
               <strong>
                 {reportQuery.data.employee.admissionDate
                   ? new Date(reportQuery.data.employee.admissionDate).toLocaleDateString("pt-BR")
@@ -448,7 +568,7 @@ export function EpiPage() {
                   {item.responsibleUser?.email ?? "-"}
                 </p>
                 <p>
-                  Confirmação: {item.confirmationMethod} | Assinatura funcionário:{" "}
+                  Confirmacao: {item.confirmationMethod} | Assinatura funcionario:{" "}
                   {item.employeeSignatureName}
                 </p>
                 <p className="text-slate-500">{new Date(item.date).toLocaleString("pt-BR")}</p>

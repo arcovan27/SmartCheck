@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { ConfirmationMethod, EpiMovementType } from "@prisma/client";
+import { ConfirmationMethod, EpiMovementType, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 
@@ -99,6 +99,30 @@ export async function epiRoutes(app: FastifyInstance) {
       where: { id: params.id },
       data: body
     });
+  });
+
+  app.delete("/epis/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const params = z.object({ id: z.string().cuid() }).parse(request.params);
+
+    try {
+      await prisma.epi.delete({
+        where: { id: params.id }
+      });
+      return reply.send({ message: "EPI apagado com sucesso" });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === "P2025") {
+          return reply.code(404).send({ message: "EPI nao encontrado" });
+        }
+        if (error.code === "P2003") {
+          return reply
+            .code(409)
+            .send({ message: "Nao e possivel apagar: este EPI possui movimentacoes registradas" });
+        }
+      }
+
+      throw error;
+    }
   });
 
   app.get("/epi-deliveries", { preHandler: [app.authenticate] }, async (request) => {
