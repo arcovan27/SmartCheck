@@ -144,6 +144,9 @@ model EmployeeOccurrence {
   description String
   daysAway    Int?
   notes       String?
+  attachmentPath     String?
+  attachmentMimeType String?
+  attachmentFilename String?
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
 }

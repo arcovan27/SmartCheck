@@ -76,6 +76,7 @@ export function EmployeesPage() {
     daysAway: "",
     notes: ""
   });
+  const [occurrenceFile, setOccurrenceFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!photoFile) {
@@ -182,24 +183,39 @@ export function EmployeesPage() {
   });
 
   const createOccurrenceMutation = useMutation({
-    mutationFn: (payload: {
+    mutationFn: async (payload: {
       employeeId: string;
       type: string;
       date: string;
       description: string;
       daysAway?: number | null;
       notes?: string | null;
-    }) =>
-      apiRequest(`/employees/${payload.employeeId}/occurrences`, {
+    }) => {
+      let attachmentPath: string | null = null;
+      let attachmentMimeType: string | null = null;
+      let attachmentFilename: string | null = null;
+
+      if (occurrenceFile) {
+        const uploaded = await uploadFile(occurrenceFile);
+        attachmentPath = uploaded.path;
+        attachmentMimeType = occurrenceFile.type || null;
+        attachmentFilename = occurrenceFile.name || null;
+      }
+
+      return apiRequest(`/employees/${payload.employeeId}/occurrences`, {
         method: "POST",
         body: JSON.stringify({
           type: payload.type,
           date: payload.date,
           description: payload.description,
           daysAway: payload.daysAway ?? null,
-          notes: payload.notes ?? null
+          notes: payload.notes ?? null,
+          attachmentPath,
+          attachmentMimeType,
+          attachmentFilename
         })
-      }),
+      });
+    },
     onSuccess: async () => {
       setActionMessage("Ocorrencia registrada com sucesso.");
       setOccurrenceForm({
@@ -209,6 +225,7 @@ export function EmployeesPage() {
         daysAway: "",
         notes: ""
       });
+      setOccurrenceFile(null);
       if (selectedId) {
         await queryClient.invalidateQueries({ queryKey: ["employee-details", selectedId] });
       }
@@ -809,6 +826,17 @@ export function EmployeesPage() {
                 setOccurrenceForm((prev) => ({ ...prev, notes: event.target.value }))
               }
             />
+            <div className="space-y-2">
+              <input
+                className="input"
+                type="file"
+                accept="image/*,application/pdf,.pdf"
+                onChange={(event) => setOccurrenceFile(event.target.files?.[0] ?? null)}
+              />
+              {occurrenceFile && (
+                <p className="text-xs text-slate-600">Anexo selecionado: {occurrenceFile.name}</p>
+              )}
+            </div>
             <button
               type="button"
               className="btn-primary w-full"
@@ -845,6 +873,33 @@ export function EmployeesPage() {
                       </p>
                       <p>{occurrence.description}</p>
                       {occurrence.notes ? <p className="text-slate-600">{occurrence.notes}</p> : null}
+                      {occurrence.attachmentPath ? (
+                        <div className="mt-2">
+                          {String(occurrence.attachmentMimeType ?? "").startsWith("image/") ? (
+                            <a
+                              href={getUploadedFileUrl(occurrence.attachmentPath) ?? "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-block"
+                            >
+                              <img
+                                src={getUploadedFileUrl(occurrence.attachmentPath) ?? ""}
+                                alt="Anexo da ocorrencia"
+                                className="h-20 w-20 rounded-md border border-slate-200 object-cover"
+                              />
+                            </a>
+                          ) : (
+                            <a
+                              href={getUploadedFileUrl(occurrence.attachmentPath) ?? "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-sm font-medium text-cyan-700 underline"
+                            >
+                              Ver anexo PDF
+                            </a>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                     <button
                       type="button"

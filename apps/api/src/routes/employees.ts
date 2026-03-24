@@ -364,7 +364,10 @@ export async function employeeRoutes(app: FastifyInstance) {
         date: z.coerce.date(),
         description: z.string().min(3),
         daysAway: z.number().int().min(0).optional().nullable(),
-        notes: z.string().optional().nullable()
+        notes: z.string().optional().nullable(),
+        attachmentPath: z.string().optional().nullable(),
+        attachmentMimeType: z.string().optional().nullable(),
+        attachmentFilename: z.string().optional().nullable()
       })
       .parse(request.body);
 
@@ -384,7 +387,10 @@ export async function employeeRoutes(app: FastifyInstance) {
         date: body.date,
         description: body.description,
         daysAway: body.daysAway ?? null,
-        notes: body.notes ?? null
+        notes: body.notes ?? null,
+        attachmentPath: body.attachmentPath ?? null,
+        attachmentMimeType: body.attachmentMimeType ?? null,
+        attachmentFilename: body.attachmentFilename ?? null
       }
     });
 
