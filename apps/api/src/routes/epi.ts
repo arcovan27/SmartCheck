@@ -145,7 +145,9 @@ export async function epiRoutes(app: FastifyInstance) {
       include: {
         employee: true,
         epi: true,
-        responsibleUser: true,
+        responsibleUser: {
+          include: { employee: true }
+        },
         attachments: true
       },
       orderBy: { date: "desc" }
@@ -209,7 +211,9 @@ export async function epiRoutes(app: FastifyInstance) {
         include: {
           employee: true,
           epi: true,
-          responsibleUser: true,
+          responsibleUser: {
+            include: { employee: true }
+          },
           attachments: true
         }
       });
@@ -234,7 +238,12 @@ export async function epiRoutes(app: FastifyInstance) {
 
       const deliveries = await prisma.epiDelivery.findMany({
         where: { employeeId: params.employeeId },
-        include: { epi: true, responsibleUser: true },
+        include: {
+          epi: true,
+          responsibleUser: {
+            include: { employee: true }
+          }
+        },
         orderBy: { date: "desc" }
       });
 

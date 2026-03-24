@@ -223,7 +223,12 @@ export function EntregaEpiPage() {
     const employeeBioMatch = (targetDelivery?.notes ?? "").match(/\[BIO_EMPLOYEE:([^\]]+)\]/);
     const employeeBioId = employeeBioMatch?.[1] ?? targetDelivery?.confirmationBiometricId ?? "-";
     const responsibleBioId = responsibleBioMatch?.[1] ?? "-";
-    const responsibleLabel = targetDelivery?.responsibleUser?.email ?? user?.email ?? "-";
+    const responsibleLabel =
+      targetDelivery?.responsibleUser?.employee?.name ??
+      targetDelivery?.responsibleUser?.email ??
+      user?.employee?.name ??
+      user?.email ??
+      "-";
     const signedAt = targetDelivery?.employeeConfirmedAt
       ? new Date(targetDelivery.employeeConfirmedAt).toLocaleString("pt-BR")
       : "-";
@@ -481,7 +486,7 @@ export function EntregaEpiPage() {
                   </p>
                   <p>
                     {item.movementType} | Quantidade: {item.quantity} | Entregue por:{" "}
-                    {item.responsibleUser?.email ?? "-"}
+                    {item.responsibleUser?.employee?.name ?? item.responsibleUser?.email ?? "-"}
                   </p>
                   <p>
                     Confirmacao: {item.confirmationMethod} | Assinatura funcionario:{" "}
