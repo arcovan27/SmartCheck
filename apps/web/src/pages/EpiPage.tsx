@@ -11,6 +11,7 @@ type Epi = {
   category: string;
   validityDate?: string | null;
   unit: string;
+  purchasePrice?: number | null;
   stock: number;
   minimumStock: number;
   isActive: boolean;
@@ -30,6 +31,7 @@ const epiFormInitial = {
   category: "",
   validityDate: "",
   unit: "UN",
+  purchasePrice: "",
   stock: 0,
   minimumStock: 0,
   isActive: true
@@ -85,6 +87,7 @@ export function EpiPage() {
       return;
     }
 
+    let grandTotal = 0;
     const rows = items
       .map((epi) => {
         const status = epi.stock === 0 ? "ZERADO" : "ESTOQUE MINIMO";
@@ -93,6 +96,9 @@ export function EpiPage() {
         const targetByConsumption = Math.ceil(consumption.avgPerDay * targetDays);
         const targetStock = Math.max(epi.minimumStock, targetByConsumption);
         const suggestedQty = Math.max(targetStock - epi.stock, 0);
+        const unitPrice = epi.purchasePrice ?? null;
+        const itemTotal = unitPrice !== null ? unitPrice * suggestedQty : null;
+        if (itemTotal !== null) grandTotal += itemTotal;
         return `
           <tr>
             <td>${epi.name}</td>
@@ -103,6 +109,8 @@ export function EpiPage() {
             <td>${consumption.net30Days}</td>
             <td>${status}</td>
             <td>${suggestedQty}</td>
+            <td>${unitPrice !== null ? unitPrice.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "-"}</td>
+            <td>${itemTotal !== null ? itemTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "-"}</td>
           </tr>
         `;
       })
@@ -138,10 +146,15 @@ export function EpiPage() {
                 <th>Consumo 30 dias</th>
                 <th>Status</th>
                 <th>Sugestao compra</th>
+                <th>Valor unitario</th>
+                <th>Total previsto</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
+          <p style="margin-top: 12px; font-weight: 700;">
+            Gasto total previsto: ${grandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+          </p>
           <script>
             window.onload = function() { window.print(); };
           </script>
@@ -193,6 +206,7 @@ export function EpiPage() {
     const payload = {
       ...epiForm,
       validityDate: epiForm.validityDate || null,
+      purchasePrice: epiForm.purchasePrice === "" ? null : Number(epiForm.purchasePrice),
       stock: Number(epiForm.stock),
       minimumStock: Number(epiForm.minimumStock)
     };
@@ -215,6 +229,7 @@ export function EpiPage() {
       category: epi.category ?? "",
       validityDate: epi.validityDate ? new Date(epi.validityDate).toISOString().slice(0, 10) : "",
       unit: epi.unit ?? "UN",
+      purchasePrice: epi.purchasePrice === null || epi.purchasePrice === undefined ? "" : String(epi.purchasePrice),
       stock: Number(epi.stock ?? 0),
       minimumStock: Number(epi.minimumStock ?? 0),
       isActive: epi.isActive ?? true
@@ -292,7 +307,7 @@ export function EpiPage() {
             required
           />
         </div>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-4">
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-600">Unidade</label>
             <input
@@ -301,6 +316,18 @@ export function EpiPage() {
               value={epiForm.unit}
               onChange={(e) => setEpiForm({ ...epiForm, unit: e.target.value })}
               required
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-600">Valor de compra (R$)</label>
+            <input
+              className="input"
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="Opcional"
+              value={epiForm.purchasePrice}
+              onChange={(e) => setEpiForm({ ...epiForm, purchasePrice: e.target.value })}
             />
           </div>
           <div className="space-y-1">
@@ -380,6 +407,12 @@ export function EpiPage() {
               </p>
               <p>
                 Estoque: <strong>{epi.stock}</strong> ({epi.unit}) | Minimo: {epi.minimumStock}
+              </p>
+              <p className="text-slate-500">
+                Valor compra:{" "}
+                {epi.purchasePrice !== null && epi.purchasePrice !== undefined
+                  ? epi.purchasePrice.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                  : "-"}
               </p>
               <div className="mt-2 flex gap-2">
                 <button

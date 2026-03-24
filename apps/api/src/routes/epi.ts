@@ -63,6 +63,7 @@ export async function epiRoutes(app: FastifyInstance) {
         category: z.string().min(1),
         validityDate: z.coerce.date().optional().nullable(),
         unit: z.string().min(1),
+        purchasePrice: z.number().min(0).optional().nullable(),
         stock: z.number().int().min(0),
         minimumStock: z.number().int().min(0),
         isActive: z.boolean().optional()
@@ -89,6 +90,7 @@ export async function epiRoutes(app: FastifyInstance) {
         category: z.string().min(1).optional(),
         validityDate: z.coerce.date().optional().nullable(),
         unit: z.string().min(1).optional(),
+        purchasePrice: z.number().min(0).optional().nullable(),
         stock: z.number().int().min(0).optional(),
         minimumStock: z.number().int().min(0).optional(),
         isActive: z.boolean().optional()
