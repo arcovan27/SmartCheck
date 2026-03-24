@@ -174,6 +174,7 @@ export async function equipmentRoutes(app: FastifyInstance) {
           });
         }
 
+        await tx.checklistTemplateEquipment.deleteMany({ where: { equipmentId: params.id } });
         await tx.checklistTemplate.updateMany({
           where: { equipmentId: params.id },
           data: { equipmentId: null }

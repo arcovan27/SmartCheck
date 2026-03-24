@@ -69,13 +69,24 @@ export async function checklistRoutes(app: FastifyInstance) {
       where: {
         ...(query.equipmentId
           ? {
-              OR: [{ equipmentId: query.equipmentId }, { equipmentId: null }]
+              OR: [
+                {
+                  equipmentLinks: {
+                    some: { equipmentId: query.equipmentId }
+                  }
+                },
+                { equipmentId: query.equipmentId }
+              ]
             }
           : {}),
         isActive: query.isActive
       },
       include: {
         equipment: true,
+        equipmentLinks: {
+          include: { equipment: true },
+          orderBy: { equipmentId: "asc" }
+        },
         items: { orderBy: { position: "asc" } }
       },
       orderBy: { name: "asc" }
@@ -89,7 +100,7 @@ export async function checklistRoutes(app: FastifyInstance) {
         code: z.nativeEnum(ChecklistTemplateCode).optional(),
         description: z.string().optional().nullable(),
         periodicity: z.nativeEnum(ChecklistPeriodicity),
-        equipmentId: z.string().cuid().optional().nullable(),
+        equipmentIds: z.array(z.string().cuid()).min(1),
         isActive: z.boolean().optional(),
         items: z
           .array(
@@ -116,13 +127,23 @@ export async function checklistRoutes(app: FastifyInstance) {
         code: body.code ?? ChecklistTemplateCode.OUTRO,
         description: body.description,
         periodicity: body.periodicity,
-        equipmentId: body.equipmentId ?? null,
+        equipmentId: body.equipmentIds[0] ?? null,
         isActive: body.isActive ?? true,
+        equipmentLinks: {
+          create: body.equipmentIds.map((equipmentId) => ({ equipmentId }))
+        },
         items: {
           create: body.items
         }
       },
-      include: { items: { orderBy: { position: "asc" } }, equipment: true }
+      include: {
+        equipment: true,
+        equipmentLinks: {
+          include: { equipment: true },
+          orderBy: { equipmentId: "asc" }
+        },
+        items: { orderBy: { position: "asc" } }
+      }
     });
 
     return reply.code(201).send(template);
@@ -137,7 +158,7 @@ export async function checklistRoutes(app: FastifyInstance) {
         code: z.nativeEnum(ChecklistTemplateCode).optional(),
         description: z.string().optional().nullable(),
         periodicity: z.nativeEnum(ChecklistPeriodicity).optional(),
-        equipmentId: z.string().cuid().optional().nullable(),
+        equipmentIds: z.array(z.string().cuid()).min(1).optional(),
         isActive: z.boolean().optional(),
         items: z
           .array(
@@ -172,10 +193,27 @@ export async function checklistRoutes(app: FastifyInstance) {
           code: body.code,
           description: body.description,
           periodicity: body.periodicity,
-          equipmentId: body.equipmentId === undefined ? undefined : body.equipmentId,
+          equipmentId: body.equipmentIds?.[0] ?? undefined,
           isActive: body.isActive
         }
       });
+
+      if (body.equipmentIds) {
+        await tx.checklistTemplateEquipment.deleteMany({
+          where: {
+            templateId: params.id,
+            equipmentId: { notIn: body.equipmentIds }
+          }
+        });
+
+        await tx.checklistTemplateEquipment.createMany({
+          data: body.equipmentIds.map((equipmentId) => ({
+            templateId: params.id,
+            equipmentId
+          })),
+          skipDuplicates: true
+        });
+      }
 
       if (body.items) {
         const submittedIds = new Set(body.items.map((item) => item.id).filter(Boolean));
@@ -237,6 +275,10 @@ export async function checklistRoutes(app: FastifyInstance) {
         where: { id: updatedTemplate.id },
         include: {
           equipment: true,
+          equipmentLinks: {
+            include: { equipment: true },
+            orderBy: { equipmentId: "asc" }
+          },
           items: { orderBy: { position: "asc" } }
         }
       });

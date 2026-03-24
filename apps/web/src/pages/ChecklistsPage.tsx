@@ -12,7 +12,7 @@ const emptyForm = {
   name: "",
   code: "OUTRO" as const,
   periodicity: "DIARIO",
-  equipmentId: "",
+  equipmentIds: [] as string[],
   description: "",
   items: [{ label: "", section: "Itens de inspecao" }] as TemplateItem[]
 };
@@ -68,11 +68,15 @@ export function ChecklistsPage() {
       setMessage("Adicione pelo menos um item no modelo.");
       return;
     }
+    if (form.equipmentIds.length === 0) {
+      setMessage("Selecione pelo menos um equipamento para este modelo.");
+      return;
+    }
     saveTemplate.mutate({
       name: form.name,
       code: "OUTRO",
       periodicity: form.periodicity,
-      equipmentId: form.equipmentId || null,
+      equipmentIds: form.equipmentIds,
       description: form.description || null,
       items: validItems
         .map((item, index) => ({
@@ -98,7 +102,12 @@ export function ChecklistsPage() {
       name: template.name ?? "",
       code: "OUTRO",
       periodicity: template.periodicity ?? "DIARIO",
-      equipmentId: template.equipmentId ?? "",
+      equipmentIds:
+        template.equipmentLinks?.length > 0
+          ? template.equipmentLinks.map((link: any) => link.equipmentId)
+          : template.equipmentId
+            ? [template.equipmentId]
+            : [],
       description: template.description ?? "",
       items:
         template.items?.length > 0
@@ -132,7 +141,7 @@ export function ChecklistsPage() {
           Aqui voce define apenas os modelos. A execucao operacional fica no menu "Execucao de Checklist".
         </p>
         <form className="space-y-3" onSubmit={submitTemplate}>
-          <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid gap-2">
             <input
               className="input"
               placeholder="Nome do checklist"
@@ -140,18 +149,31 @@ export function ChecklistsPage() {
               onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
               required
             />
-            <select
-              className="select"
-              value={form.equipmentId}
-              onChange={(event) => setForm((prev) => ({ ...prev, equipmentId: event.target.value }))}
-            >
-              <option value="">Modelo reutilizavel (todos os equipamentos)</option>
-              {equipmentsQuery.data?.map((equipment) => (
-                <option key={equipment.id} value={equipment.id}>
-                  {equipment.name}
-                </option>
-              ))}
-            </select>
+            <div className="rounded-xl border border-slate-200 p-3">
+              <p className="mb-2 text-sm font-semibold text-slate-700">Equipamentos que vao usar este checklist</p>
+              <div className="grid gap-2 md:grid-cols-2">
+                {equipmentsQuery.data?.map((equipment) => {
+                  const checked = form.equipmentIds.includes(equipment.id);
+                  return (
+                    <label key={equipment.id} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            equipmentIds: event.target.checked
+                              ? [...prev.equipmentIds, equipment.id]
+                              : prev.equipmentIds.filter((id) => id !== equipment.id)
+                          }))
+                        }
+                      />
+                      <span>{equipment.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             <select
@@ -256,7 +278,11 @@ export function ChecklistsPage() {
             <div key={template.id} className="rounded-xl border border-slate-200 p-3 text-sm">
               <p className="font-semibold">{template.name}</p>
               <p className="text-slate-500">
-                Vinculo: {template.equipment?.name ?? "Todos os equipamentos"} | Periodicidade: {template.periodicity}
+                Vinculo:{" "}
+                {template.equipmentLinks?.length
+                  ? template.equipmentLinks.map((link: any) => link.equipment?.name).filter(Boolean).join(", ")
+                  : template.equipment?.name ?? "-"}{" "}
+                | Periodicidade: {template.periodicity}
               </p>
               <p>Itens: {template.items?.length ?? 0}</p>
               <div className="mt-2 flex gap-2">
