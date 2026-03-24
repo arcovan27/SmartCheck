@@ -9,6 +9,7 @@ RUN npm install
 COPY . .
 WORKDIR /app/apps/api
 RUN npm run prisma:generate
+RUN chmod +x /app/apps/api/docker-entrypoint.sh
 
 EXPOSE 3333
-CMD ["sh", "-c", "npm run prisma:deploy && npm run seed && npm run dev"]
+CMD ["/app/apps/api/docker-entrypoint.sh"]

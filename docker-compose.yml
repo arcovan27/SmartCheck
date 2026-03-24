@@ -27,6 +27,7 @@ services:
       JWT_SECRET: supersecretkey
       WEB_ORIGIN: http://localhost:5173
       UPLOAD_DIR: uploads
+      RUN_SEED_ON_START: "false"
     volumes:
       - ./apps/api/uploads:/app/apps/api/uploads
       - ./apps/api:/app/apps/api
@@ -56,3 +57,4 @@ services:
 
 volumes:
   postgres_data:
+    name: smartcheck_postgres_data

@@ -31,6 +31,15 @@ Plataforma web para gestão operacional industrial com foco em checklists, manut
 docker compose up --build
 ```
 
+Observação importante sobre dados:
+- O banco PostgreSQL usa volume persistente (`smartcheck_postgres_data`), então os dados nao devem ser perdidos em `up --build`.
+- A seed NAO roda automaticamente no startup da API.
+- Para popular dados manualmente quando necessario:
+```bash
+docker compose exec api npm run seed
+```
+- Se quiser seed automatica temporariamente (ambiente de teste), altere `RUN_SEED_ON_START` para `"true"` no `docker-compose.yml`.
+
 Acessos:
 - Web: `http://localhost:5173`
 - API: `http://localhost:3333`
