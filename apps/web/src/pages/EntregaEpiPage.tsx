@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL, apiRequest } from "../lib/api";
+import { useAuth } from "../lib/auth";
 
 const defaultPrintTerm =
   "Recebi da Empresa Acima, os EPI's abaixo relacionados, que sao fornecidos gratuitamente nos termos do Art 166 da C.L.T e item 6.2.1.2 da NR-6 da portaria 3.214 de 08/06/78, declaro ainda estar ciente que de acordo com art. 158, Paragrafo unico, letra \"b\" da CLT e item 6.3 da NR-6 da mesma portaria, que devo usar, obrigatoriamente estes EPI's durante toda jornada de trabalho, responsabilizar-me pela sua guarda e conservacao, comunicar ao Dep. De Pessoal, qualquer alteracao que os tornem danificados ou extraviados. Atesto ainda estar orientado e treinado da utilizacao correta destes EPI's abaixo relacionados.";
@@ -16,6 +17,7 @@ function escapeHtml(value: string) {
 
 export function EntregaEpiPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const biometricAgentUrl = import.meta.env.VITE_BIOMETRIC_AGENT_URL ?? "http://127.0.0.1:4100";
   const [actionMessage, setActionMessage] = useState("");
   const [isReadingFingerprint, setIsReadingFingerprint] = useState(false);
@@ -27,7 +29,7 @@ export function EntregaEpiPage() {
     quantity: 1,
     date: new Date().toISOString().slice(0, 10),
     notes: "",
-    confirmationMethod: "LOGIN",
+    confirmationMethod: "BIOMETRIA",
     confirmationBiometricId: "",
     employeeSignatureName: ""
   });
@@ -129,35 +131,55 @@ export function EntregaEpiPage() {
 
     try {
       let confirmationBiometricId: string | null = null;
+      let responsibleBiometricId: string | null = null;
 
-      if (deliveryForm.confirmationMethod === "BIOMETRIA") {
-        if (!deliveryForm.employeeId) {
-          throw new Error("Selecione o funcionario para validar a biometria.");
-        }
-        setIsReadingFingerprint(true);
-        const identifyResult = await identifyEmployeeWithAgent(deliveryForm.employeeId);
-        setIsReadingFingerprint(false);
-
-        if (!identifyResult.employeeId || identifyResult.employeeId !== deliveryForm.employeeId) {
-          throw new Error("A digital lida nao pertence ao funcionario selecionado.");
-        }
-
-        confirmationBiometricId =
-          identifyResult.biometricExternalId ?? identifyResult.biometricRecordId ?? null;
-        if (!confirmationBiometricId) {
-          throw new Error("Biometria validada, mas sem identificador retornado pelo agente.");
-        }
-
-        setDeliveryForm((prev) => ({ ...prev, confirmationBiometricId: confirmationBiometricId ?? "" }));
-        setActionMessage("Digital validada. Finalizando registro da entrega...");
+      if (!deliveryForm.employeeId) {
+        throw new Error("Selecione o funcionario para validar a biometria.");
       }
+      if (!user?.employee?.id) {
+        throw new Error("Usuario logado sem vinculo com funcionario. Nao foi possivel validar biometria do responsavel.");
+      }
+
+      setIsReadingFingerprint(true);
+      setActionMessage("Aguardando digital do funcionario que esta retirando o EPI...");
+      const identifyEmployeeResult = await identifyEmployeeWithAgent(deliveryForm.employeeId);
+
+      if (!identifyEmployeeResult.employeeId || identifyEmployeeResult.employeeId !== deliveryForm.employeeId) {
+        throw new Error("A digital lida nao pertence ao funcionario selecionado.");
+      }
+      confirmationBiometricId =
+        identifyEmployeeResult.biometricExternalId ?? identifyEmployeeResult.biometricRecordId ?? null;
+      if (!confirmationBiometricId) {
+        throw new Error("Biometria do funcionario validada, mas sem identificador retornado.");
+      }
+
+      setActionMessage("Agora confirme com a digital do responsavel pela entrega...");
+      const identifyResponsibleResult = await identifyEmployeeWithAgent(user.employee.id);
+      if (!identifyResponsibleResult.employeeId || identifyResponsibleResult.employeeId !== user.employee.id) {
+        throw new Error("A digital lida nao pertence ao responsavel logado.");
+      }
+      responsibleBiometricId =
+        identifyResponsibleResult.biometricExternalId ?? identifyResponsibleResult.biometricRecordId ?? null;
+      if (!responsibleBiometricId) {
+        throw new Error("Biometria do responsavel validada, mas sem identificador retornado.");
+      }
+
+      setIsReadingFingerprint(false);
+      setDeliveryForm((prev) => ({ ...prev, confirmationBiometricId: confirmationBiometricId ?? "" }));
+      setActionMessage("Biometrias validadas. Finalizando registro da entrega...");
+
+      const biometricAuditNote = `[BIO_EMPLOYEE:${confirmationBiometricId}] [BIO_RESPONSIBLE:${responsibleBiometricId}]`;
+      const movementNotes = deliveryForm.notes
+        ? `${deliveryForm.notes}\n${biometricAuditNote}`
+        : biometricAuditNote;
 
       await createMovement.mutateAsync({
         ...deliveryForm,
+        confirmationMethod: "BIOMETRIA",
         quantity: Number(deliveryForm.quantity),
         employeeSignatureName: deliveryForm.employeeSignatureName || selectedEmployee?.name,
-        confirmationBiometricId:
-          deliveryForm.confirmationMethod === "BIOMETRIA" ? confirmationBiometricId : null
+        confirmationBiometricId,
+        notes: movementNotes
       });
     } catch (error) {
       setIsReadingFingerprint(false);
@@ -183,6 +205,15 @@ export function EntregaEpiPage() {
         `
       )
       .join("");
+    const lastDelivery = deliveries[0];
+    const responsibleBioMatch = (lastDelivery?.notes ?? "").match(/\[BIO_RESPONSIBLE:([^\]]+)\]/);
+    const employeeBioMatch = (lastDelivery?.notes ?? "").match(/\[BIO_EMPLOYEE:([^\]]+)\]/);
+    const employeeBioId = employeeBioMatch?.[1] ?? lastDelivery?.confirmationBiometricId ?? "-";
+    const responsibleBioId = responsibleBioMatch?.[1] ?? "-";
+    const responsibleLabel = lastDelivery?.responsibleUser?.email ?? user?.email ?? "-";
+    const signedAt = lastDelivery?.employeeConfirmedAt
+      ? new Date(lastDelivery.employeeConfirmedAt).toLocaleString("pt-BR")
+      : "-";
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
@@ -199,8 +230,9 @@ export function EntregaEpiPage() {
             table { width: 100%; border-collapse: collapse; margin-top: 12px; }
             th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; font-size: 13px; }
             th { background: #f3f4f6; }
-            .sign { margin-top: 48px; display: grid; gap: 8px; }
-            .line { width: 320px; border-top: 1px solid #111827; padding-top: 6px; }
+            .sign { margin-top: 28px; display: grid; gap: 12px; }
+            .stamp { border: 1px solid #111827; border-radius: 8px; padding: 10px; }
+            .stamp strong { display: block; margin-bottom: 6px; }
           </style>
         </head>
         <body>
@@ -226,8 +258,16 @@ export function EntregaEpiPage() {
             </tbody>
           </table>
           <div class="sign">
-            <div class="line">Assinatura do funcionario</div>
-            <div class="line">Assinatura do responsavel</div>
+            <div class="stamp">
+              <strong>Assinatura do funcionario (biometria)</strong>
+              ID biometria: ${escapeHtml(employeeBioId)}<br/>
+              Confirmado em: ${escapeHtml(signedAt)}
+            </div>
+            <div class="stamp">
+              <strong>Assinatura do responsavel (biometria)</strong>
+              Usuario responsavel: ${escapeHtml(responsibleLabel)}<br/>
+              ID biometria: ${escapeHtml(responsibleBioId)}
+            </div>
           </div>
           <script>
             window.onload = function() { window.print(); };
@@ -310,29 +350,16 @@ export function EntregaEpiPage() {
           onChange={(e) => setDeliveryForm({ ...deliveryForm, date: e.target.value })}
           required
         />
-        <select
-          className="select"
-          value={deliveryForm.confirmationMethod}
-          onChange={(e) =>
-            setDeliveryForm({
-              ...deliveryForm,
-              confirmationMethod: e.target.value,
-              confirmationBiometricId: ""
-            })
-          }
-        >
-          <option value="LOGIN">Assinatura digital do funcionario</option>
-          <option value="BIOMETRIA">Confirmacao biometrica (agente local)</option>
-        </select>
-        {deliveryForm.confirmationMethod === "BIOMETRIA" && (
-          <input
-            className="input"
-            placeholder="ID biometrico retornado pelo agente"
-            value={deliveryForm.confirmationBiometricId}
-            readOnly
-            disabled
-          />
-        )}
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-900">
+          Assinatura obrigatoria por biometria para funcionario e responsavel pela entrega.
+        </div>
+        <input
+          className="input"
+          placeholder="ID biometrico do funcionario (automatico)"
+          value={deliveryForm.confirmationBiometricId}
+          readOnly
+          disabled
+        />
         <input
           className="input"
           placeholder="Confirmacao do funcionario (nome)"
