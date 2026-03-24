@@ -34,6 +34,7 @@ export function EntregaEpiPage() {
     employeeSignatureName: ""
   });
   const [reportEmployeeId, setReportEmployeeId] = useState("");
+  const [lastRegisteredDeliveryId, setLastRegisteredDeliveryId] = useState<string | null>(null);
 
   useEffect(() => {
     const savedTerm = localStorage.getItem("smartcheck.epi.printTerm");
@@ -173,26 +174,39 @@ export function EntregaEpiPage() {
         ? `${deliveryForm.notes}\n${biometricAuditNote}`
         : biometricAuditNote;
 
-      await createMovement.mutateAsync({
+      const createdMovement = (await createMovement.mutateAsync({
         ...deliveryForm,
         confirmationMethod: "BIOMETRIA",
         quantity: Number(deliveryForm.quantity),
         employeeSignatureName: deliveryForm.employeeSignatureName || selectedEmployee?.name,
         confirmationBiometricId,
         notes: movementNotes
-      });
+      })) as any;
+      setLastRegisteredDeliveryId(createdMovement?.id ?? null);
     } catch (error) {
       setIsReadingFingerprint(false);
       setActionMessage((error as Error).message);
     }
   }
 
-  function printEmployeeCopy() {
+  function printEmployeeCopy(deliveryId?: string) {
     if (!reportQuery.data) return;
 
     const employee = reportQuery.data.employee;
     const deliveries = reportQuery.data.deliveries ?? [];
-    const rows = deliveries
+    const selectedById = deliveryId ? deliveries.find((item: any) => item.id === deliveryId) : undefined;
+    const selectedLastRegistered = lastRegisteredDeliveryId
+      ? deliveries.find((item: any) => item.id === lastRegisteredDeliveryId)
+      : undefined;
+    const targetDelivery =
+      selectedById ??
+      selectedLastRegistered ??
+      deliveries.find((item: any) => item.movementType === "ENTREGA") ??
+      deliveries[0];
+
+    if (!targetDelivery) return;
+
+    const rows = [targetDelivery]
       .map(
         (item: any) => `
           <tr>
@@ -205,14 +219,13 @@ export function EntregaEpiPage() {
         `
       )
       .join("");
-    const lastDelivery = deliveries[0];
-    const responsibleBioMatch = (lastDelivery?.notes ?? "").match(/\[BIO_RESPONSIBLE:([^\]]+)\]/);
-    const employeeBioMatch = (lastDelivery?.notes ?? "").match(/\[BIO_EMPLOYEE:([^\]]+)\]/);
-    const employeeBioId = employeeBioMatch?.[1] ?? lastDelivery?.confirmationBiometricId ?? "-";
+    const responsibleBioMatch = (targetDelivery?.notes ?? "").match(/\[BIO_RESPONSIBLE:([^\]]+)\]/);
+    const employeeBioMatch = (targetDelivery?.notes ?? "").match(/\[BIO_EMPLOYEE:([^\]]+)\]/);
+    const employeeBioId = employeeBioMatch?.[1] ?? targetDelivery?.confirmationBiometricId ?? "-";
     const responsibleBioId = responsibleBioMatch?.[1] ?? "-";
-    const responsibleLabel = lastDelivery?.responsibleUser?.email ?? user?.email ?? "-";
-    const signedAt = lastDelivery?.employeeConfirmedAt
-      ? new Date(lastDelivery.employeeConfirmedAt).toLocaleString("pt-BR")
+    const responsibleLabel = targetDelivery?.responsibleUser?.email ?? user?.email ?? "-";
+    const signedAt = targetDelivery?.employeeConfirmedAt
+      ? new Date(targetDelivery.employeeConfirmedAt).toLocaleString("pt-BR")
       : "-";
 
     const printWindow = window.open("", "_blank");
@@ -240,6 +253,7 @@ export function EntregaEpiPage() {
           <p><strong>Funcionario:</strong> ${escapeHtml(employee.name ?? "-")}</p>
           <p><strong>Matricula:</strong> ${escapeHtml(employee.registration ?? "-")}</p>
           <p><strong>Setor:</strong> ${escapeHtml(employee.department ?? "-")} | <strong>Funcao:</strong> ${escapeHtml(employee.position ?? "-")}</p>
+          <p><strong>Data da entrega:</strong> ${escapeHtml(new Date(targetDelivery.date).toLocaleString("pt-BR"))}</p>
           <div class="term">
             <p><strong>Termo:</strong> ${escapeHtml(printTerm)}</p>
           </div>
@@ -443,8 +457,8 @@ export function EntregaEpiPage() {
 
           {reportQuery.data && (
             <div className="space-y-2 text-sm">
-              <button type="button" className="btn-secondary" onClick={printEmployeeCopy}>
-                Imprimir copia do funcionario
+              <button type="button" className="btn-secondary" onClick={() => printEmployeeCopy()}>
+                Imprimir copia da ultima entrega
               </button>
               <p>
                 Funcionario: <strong>{reportQuery.data.employee.name}</strong> | Matricula:{" "}
@@ -474,6 +488,13 @@ export function EntregaEpiPage() {
                     {item.employeeSignatureName}
                   </p>
                   <p className="text-slate-500">{new Date(item.date).toLocaleString("pt-BR")}</p>
+                  <button
+                    type="button"
+                    className="btn-secondary mt-2"
+                    onClick={() => printEmployeeCopy(item.id)}
+                  >
+                    Imprimir esta movimentacao
+                  </button>
                 </div>
               ))}
             </div>
