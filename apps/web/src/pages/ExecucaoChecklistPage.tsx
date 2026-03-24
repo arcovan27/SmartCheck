@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, uploadFile } from "../lib/api";
+import { apiRequest, getUploadedFileUrl, uploadFile } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
 type ChecklistCode =
@@ -49,6 +49,7 @@ export function ExecucaoChecklistPage() {
   const [workingHoursStartMonth, setWorkingHoursStartMonth] = useState("");
   const [fuelLevel, setFuelLevel] = useState("");
   const [notes, setNotes] = useState("");
+  const [openedHistoryDetails, setOpenedHistoryDetails] = useState<Record<string, boolean>>({});
 
   const equipmentsQuery = useQuery({ queryKey: ["equipments"], queryFn: () => apiRequest<any[]>("/equipments") });
   const templatesQuery = useQuery({
@@ -376,6 +377,58 @@ export function ExecucaoChecklistPage() {
                     <p className={execution.hadProblem ? "text-red-700" : "text-emerald-700"}>
                       {execution.hadProblem ? "Com falha" : "Sem falha"}
                     </p>
+                    {execution.hadProblem && execution.items?.length > 0 && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() =>
+                            setOpenedHistoryDetails((prev) => ({
+                              ...prev,
+                              [execution.id]: !prev[execution.id]
+                            }))
+                          }
+                        >
+                          {openedHistoryDetails[execution.id] ? "Ocultar falhas" : "Ver falhas"}
+                        </button>
+
+                        {openedHistoryDetails[execution.id] && (
+                          <div className="mt-2 space-y-2 rounded-xl border border-red-200 bg-red-50 p-2">
+                            {execution.items.map((problemItem: any) => (
+                              <div key={problemItem.id} className="rounded-lg border border-red-200 bg-white p-2">
+                                <p className="font-semibold text-red-800">{problemItem.templateItem?.label ?? "Item"}</p>
+                                <p className="text-sm text-slate-700">
+                                  Observacao: {problemItem.observation?.trim() ? problemItem.observation : "-"}
+                                </p>
+                                {problemItem.attachments?.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {problemItem.attachments.map((attachment: any) => {
+                                      const imageUrl = getUploadedFileUrl(attachment.path);
+                                      if (!imageUrl) return null;
+                                      return (
+                                        <a
+                                          key={attachment.id}
+                                          href={imageUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="block"
+                                        >
+                                          <img
+                                            src={imageUrl}
+                                            alt="Foto da falha"
+                                            className="h-16 w-16 rounded-md border border-slate-200 object-cover"
+                                          />
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
