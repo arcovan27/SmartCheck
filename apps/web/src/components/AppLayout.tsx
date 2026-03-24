@@ -3,7 +3,10 @@ import clsx from "clsx";
 import { useAuth } from "../lib/auth";
 import { roleLabels } from "../lib/constants";
 
-const dashboardMenu = [{ to: "/", label: "Dashboard" }];
+const dashboardMenu = [
+  { to: "/", label: "Dashboard" },
+  { to: "/entrega-epi", label: "Entrega de EPI" }
+];
 
 const cadastroMenu = [
   { to: "/funcionarios", label: "Funcionários" },
