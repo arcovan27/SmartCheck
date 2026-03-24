@@ -20,6 +20,7 @@ export function EquipmentsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
   const [form, setForm] = useState(initialForm);
 
   const equipmentsQuery = useQuery({
@@ -41,6 +42,7 @@ export function EquipmentsPage() {
       return apiRequest("/equipments", { method: "POST", body: JSON.stringify(payload) });
     },
     onSuccess: () => {
+      setMessage(selectedId ? "Equipamento atualizado com sucesso." : "Equipamento cadastrado com sucesso.");
       queryClient.invalidateQueries({ queryKey: ["equipments"] });
       if (selectedId) queryClient.invalidateQueries({ queryKey: ["equipment-details", selectedId] });
       setSelectedId(null);
@@ -48,7 +50,21 @@ export function EquipmentsPage() {
     }
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest<{ message: string }>(`/equipments/${id}`, { method: "DELETE" }),
+    onSuccess: (data, id) => {
+      setMessage(data.message ?? "Equipamento apagado com sucesso.");
+      queryClient.invalidateQueries({ queryKey: ["equipments"] });
+      queryClient.invalidateQueries({ queryKey: ["equipment-details", id] });
+      if (selectedId === id) {
+        setSelectedId(null);
+        setForm(initialForm);
+      }
+    }
+  });
+
   function selectEquipment(equipment: any) {
+    setMessage("");
     setSelectedId(equipment.id);
     setForm({
       name: equipment.name,
@@ -67,6 +83,7 @@ export function EquipmentsPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    setMessage("");
     saveMutation.mutate({
       ...form,
       serialNumber: form.serialNumber || null,
@@ -77,6 +94,13 @@ export function EquipmentsPage() {
       assetTag: form.assetTag || null,
       notes: form.notes || null
     });
+  }
+
+  function handleDelete(equipment: any) {
+    setMessage("");
+    const confirmed = window.confirm(`Apagar o equipamento "${equipment.name}"? Esta ação não pode ser desfeita.`);
+    if (!confirmed) return;
+    deleteMutation.mutate(equipment.id);
   }
 
   return (
@@ -108,6 +132,9 @@ export function EquipmentsPage() {
                   </div>
                   <button className="btn-secondary" onClick={() => selectEquipment(equipment)}>
                     Detalhes
+                  </button>
+                  <button className="btn-danger ml-2" onClick={() => handleDelete(equipment)} disabled={deleteMutation.isPending}>
+                    {deleteMutation.isPending ? "Apagando..." : "Apagar"}
                   </button>
                 </div>
               </div>
@@ -146,6 +173,16 @@ export function EquipmentsPage() {
           <button className="btn-primary w-full" disabled={saveMutation.isPending}>
             {saveMutation.isPending ? "Salvando..." : selectedId ? "Salvar alterações" : "Cadastrar equipamento"}
           </button>
+          {message && <p className="text-sm text-emerald-700">{message}</p>}
+          {(saveMutation.isError || deleteMutation.isError) && (
+            <p className="text-sm text-red-700">
+              {saveMutation.isError
+                ? (saveMutation.error as Error).message
+                : deleteMutation.isError
+                  ? (deleteMutation.error as Error).message
+                  : ""}
+            </p>
+          )}
         </form>
       </div>
 

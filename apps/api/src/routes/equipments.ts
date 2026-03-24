@@ -1,5 +1,5 @@
 ﻿import type { FastifyInstance } from "fastify";
-import { EquipmentType } from "@prisma/client";
+import { EquipmentType, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 
@@ -112,5 +112,104 @@ export async function equipmentRoutes(app: FastifyInstance) {
       where: { id: params.id },
       data: body
     });
+  });
+
+  app.delete("/equipments/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const params = z.object({ id: z.string().cuid() }).parse(request.params);
+
+    const equipment = await prisma.equipment.findUnique({
+      where: { id: params.id },
+      select: { id: true, name: true }
+    });
+
+    if (!equipment) {
+      return reply.code(404).send({ message: "Equipamento não encontrado" });
+    }
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        const templates = await tx.checklistTemplate.findMany({
+          where: { equipmentId: params.id },
+          select: { id: true }
+        });
+        const templateIds = templates.map((template) => template.id);
+
+        const executions = await tx.checklistExecution.findMany({
+          where: {
+            OR: [{ equipmentId: params.id }, ...(templateIds.length ? [{ templateId: { in: templateIds } }] : [])]
+          },
+          select: { id: true }
+        });
+        const executionIds = [...new Set(executions.map((execution) => execution.id))];
+
+        await tx.attachment.deleteMany({
+          where: {
+            maintenance: {
+              equipmentId: params.id
+            }
+          }
+        });
+
+        if (executionIds.length) {
+          await tx.attachment.deleteMany({
+            where: {
+              checklistExecutionItem: {
+                executionId: {
+                  in: executionIds
+                }
+              }
+            }
+          });
+        }
+
+        await tx.maintenance.deleteMany({ where: { equipmentId: params.id } });
+
+        if (executionIds.length) {
+          await tx.checklistExecutionItem.deleteMany({
+            where: {
+              executionId: {
+                in: executionIds
+              }
+            }
+          });
+
+          await tx.checklistExecution.deleteMany({
+            where: {
+              id: {
+                in: executionIds
+              }
+            }
+          });
+        }
+
+        if (templateIds.length) {
+          await tx.checklistTemplateItem.deleteMany({
+            where: {
+              templateId: {
+                in: templateIds
+              }
+            }
+          });
+        }
+
+        await tx.checklistTemplate.deleteMany({ where: { equipmentId: params.id } });
+        await tx.maintenancePlan.deleteMany({ where: { equipmentId: params.id } });
+        await tx.equipment.delete({ where: { id: params.id } });
+      });
+
+      return reply.send({ message: `Equipamento "${equipment.name}" e histórico vinculado apagados com sucesso.` });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === "P2025") {
+          return reply.code(404).send({ message: "Equipamento não encontrado" });
+        }
+        if (error.code === "P2003") {
+          return reply
+            .code(409)
+            .send({ message: "Não foi possível apagar tudo: ainda existe vínculo com outros registros." });
+        }
+      }
+      throw error;
+    }
   });
 }
