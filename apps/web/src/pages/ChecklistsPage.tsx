@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/api";
 
 type TemplateItem = {
+  id?: string;
   label: string;
   section: string;
 };
@@ -71,6 +72,7 @@ export function ChecklistsPage() {
       items: form.items
         .filter((item) => item.label.trim())
         .map((item, index) => ({
+          id: item.id,
           label: item.label,
           section: item.section || null,
           instruction: null,
@@ -97,6 +99,7 @@ export function ChecklistsPage() {
       items:
         template.items?.length > 0
           ? template.items.map((item: any) => ({
+              id: item.id,
               label: item.label ?? "",
               section: item.section ?? "Itens de inspecao"
             }))

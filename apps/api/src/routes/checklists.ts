@@ -138,6 +138,7 @@ export async function checklistRoutes(app: FastifyInstance) {
         items: z
           .array(
             z.object({
+              id: z.string().cuid().optional(),
               label: z.string().min(2),
               section: z.string().optional().nullable(),
               instruction: z.string().optional().nullable(),
@@ -155,11 +156,7 @@ export async function checklistRoutes(app: FastifyInstance) {
       .parse(request.body);
 
     return prisma.$transaction(async (tx) => {
-      if (body.items) {
-        await tx.checklistTemplateItem.deleteMany({ where: { templateId: params.id } });
-      }
-
-      return tx.checklistTemplate.update({
+      const updatedTemplate = await tx.checklistTemplate.update({
         where: { id: params.id },
         data: {
           name: body.name,
@@ -167,9 +164,50 @@ export async function checklistRoutes(app: FastifyInstance) {
           description: body.description,
           periodicity: body.periodicity,
           equipmentId: body.equipmentId,
-          isActive: body.isActive,
-          items: body.items ? { create: body.items } : undefined
-        },
+          isActive: body.isActive
+        }
+      });
+
+      if (body.items) {
+        for (const item of body.items) {
+          if (item.id) {
+            await tx.checklistTemplateItem.update({
+              where: { id: item.id },
+              data: {
+                label: item.label,
+                section: item.section,
+                instruction: item.instruction,
+                itemType: item.itemType,
+                position: item.position,
+                required: item.required,
+                requiresObservationOnProblem: item.requiresObservationOnProblem,
+                allowsPhotoOnProblem: item.allowsPhotoOnProblem,
+                requiresPhotoOnProblem: item.requiresPhotoOnProblem,
+                opensMaintenanceOnProblem: item.opensMaintenanceOnProblem
+              }
+            });
+          } else {
+            await tx.checklistTemplateItem.create({
+              data: {
+                templateId: params.id,
+                label: item.label,
+                section: item.section,
+                instruction: item.instruction,
+                itemType: item.itemType,
+                position: item.position,
+                required: item.required,
+                requiresObservationOnProblem: item.requiresObservationOnProblem,
+                allowsPhotoOnProblem: item.allowsPhotoOnProblem,
+                requiresPhotoOnProblem: item.requiresPhotoOnProblem,
+                opensMaintenanceOnProblem: item.opensMaintenanceOnProblem
+              }
+            });
+          }
+        }
+      }
+
+      return tx.checklistTemplate.findUniqueOrThrow({
+        where: { id: updatedTemplate.id },
         include: {
           equipment: true,
           items: { orderBy: { position: "asc" } }
