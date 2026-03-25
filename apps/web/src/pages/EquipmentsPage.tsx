@@ -131,12 +131,14 @@ export function EquipmentsPage() {
                       Horímetro: {equipment.hourmeter ?? "-"} • KM: {equipment.mileage ?? "-"}
                     </p>
                   </div>
-                  <button className="btn-secondary" onClick={() => selectEquipment(equipment)}>
-                    Detalhes
-                  </button>
-                  <button className="btn-danger ml-2" onClick={() => handleDelete(equipment)} disabled={deleteMutation.isPending}>
-                    {deleteMutation.isPending ? "Apagando..." : "Apagar"}
-                  </button>
+                  <div className="ml-auto flex items-center gap-2">
+                    <button className="btn-secondary" onClick={() => selectEquipment(equipment)}>
+                      Detalhes
+                    </button>
+                    <button className="btn-danger" onClick={() => handleDelete(equipment)} disabled={deleteMutation.isPending}>
+                      {deleteMutation.isPending ? "Apagando..." : "Apagar"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
