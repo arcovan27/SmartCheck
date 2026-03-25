@@ -24,11 +24,16 @@ const cadastroMenu = [
 export function AppLayout() {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const isChecklistOnly = Boolean(user?.checklistOnly);
   const companyQuery = useQuery({
     queryKey: ["company"],
-    queryFn: () => apiRequest<any>("/company")
+    queryFn: () => apiRequest<any>("/company"),
+    enabled: !isChecklistOnly
   });
   const companyName = companyQuery.data?.tradeName || companyQuery.data?.legalName || "";
+  const visibleDashboardMenu = isChecklistOnly
+    ? [{ to: "/execucao-checklist", label: "Execucao de Checklist" }]
+    : dashboardMenu;
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f5f7fa_0%,#e8edf3_100%)] lg:grid lg:grid-cols-[320px,1fr]">
@@ -46,9 +51,11 @@ export function AppLayout() {
 
         <div className="space-y-6">
           <section>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Dashboard</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              {isChecklistOnly ? "Checklist" : "Dashboard"}
+            </p>
             <nav className="grid gap-2">
-              {dashboardMenu.map((item) => {
+              {visibleDashboardMenu.map((item) => {
                 const active = location.pathname === item.to;
                 return (
                   <Link
@@ -68,28 +75,30 @@ export function AppLayout() {
             </nav>
           </section>
 
-          <section>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Cadastro</p>
-            <nav className="grid gap-2">
-              {cadastroMenu.map((item) => {
-                const active = location.pathname === item.to;
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className={clsx(
-                      "rounded-2xl border px-4 py-3 text-sm font-semibold transition",
-                      active
-                        ? "border-cyan-400 bg-cyan-400 text-slate-950"
-                        : "border-slate-800 bg-slate-900 text-slate-100 hover:border-slate-700 hover:bg-slate-800"
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-          </section>
+          {!isChecklistOnly && (
+            <section>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Cadastro</p>
+              <nav className="grid gap-2">
+                {cadastroMenu.map((item) => {
+                  const active = location.pathname === item.to;
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      className={clsx(
+                        "rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+                        active
+                          ? "border-cyan-400 bg-cyan-400 text-slate-950"
+                          : "border-slate-800 bg-slate-900 text-slate-100 hover:border-slate-700 hover:bg-slate-800"
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </section>
+          )}
         </div>
 
         <button

@@ -13,6 +13,7 @@ export type AuthUser = {
   email: string;
   role: UserRole;
   isActive: boolean;
+  checklistOnly?: boolean;
   employee?: {
     id: string;
     name: string;
@@ -23,6 +24,7 @@ type AuthContextType = {
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithChecklistToken: (token: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -57,12 +59,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(result.user);
   }
 
+  async function loginWithChecklistToken(token: string) {
+    const result = await apiRequest<{ token: string; user: AuthUser }>("/auth/checklist-link-login", {
+      method: "POST",
+      body: JSON.stringify({ token })
+    });
+
+    localStorage.setItem("smartcheck.token", result.token);
+    setUser(result.user);
+  }
+
   function logout() {
     localStorage.removeItem("smartcheck.token");
     setUser(null);
   }
 
-  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading]);
+  const value = useMemo(
+    () => ({ user, loading, login, loginWithChecklistToken, logout }),
+    [user, loading]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

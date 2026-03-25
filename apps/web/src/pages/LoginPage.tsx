@@ -1,14 +1,27 @@
-﻿import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+﻿import { FormEvent, useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { login, loginWithChecklistToken } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const checklistToken = searchParams.get("checklistToken");
+    if (!checklistToken) return;
+
+    setError("");
+    setLoading(true);
+    loginWithChecklistToken(checklistToken)
+      .then(() => navigate("/execucao-checklist", { replace: true }))
+      .catch((err) => setError(err instanceof Error ? err.message : "Link invalido ou expirado"))
+      .finally(() => setLoading(false));
+  }, [searchParams, loginWithChecklistToken, navigate]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -33,8 +46,8 @@ export function LoginPage() {
       >
         <div className="mb-5">
           <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">SmartCheck</p>
-          <h1 className="mt-2 text-3xl font-extrabold text-white">Operação Industrial</h1>
-          <p className="mt-2 text-sm text-slate-300">Acesso inicial do sistema com usuário administrador.</p>
+          <h1 className="mt-2 text-3xl font-extrabold text-white">Operacao Industrial</h1>
+          <p className="mt-2 text-sm text-slate-300">Acesso inicial do sistema com usuario administrador.</p>
         </div>
 
         <div className="space-y-3">

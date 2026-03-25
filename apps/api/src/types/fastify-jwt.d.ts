@@ -8,12 +8,16 @@ declare module "@fastify/jwt" {
       employeeId: string | null;
       role: UserRole;
       email: string;
+      checklistOnly?: boolean;
+      tokenType?: "SESSION" | "CHECKLIST_LINK";
     };
     user: {
       id: string;
       employeeId: string | null;
       role: UserRole;
       email: string;
+      checklistOnly?: boolean;
+      tokenType?: "SESSION" | "CHECKLIST_LINK";
     };
   }
 }

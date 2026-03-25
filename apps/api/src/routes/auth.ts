@@ -46,7 +46,9 @@ export async function authRoutes(app: FastifyInstance) {
       id: user.id,
       employeeId: user.employeeId ?? null,
       role: user.role,
-      email: user.email
+      email: user.email,
+      checklistOnly: false,
+      tokenType: "SESSION"
     });
 
     return {
@@ -62,6 +64,29 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.get("/auth/me", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.checklistOnly) {
+      if (!request.user.employeeId) {
+        return reply.code(401).send({ message: "Token de checklist invalido" });
+      }
+
+      const employee = await prisma.employee.findUnique({
+        where: { id: request.user.employeeId }
+      });
+
+      if (!employee || !employee.isActive) {
+        return reply.code(401).send({ message: "Funcionario vinculado ao link esta inativo" });
+      }
+
+      return {
+        id: request.user.id,
+        email: request.user.email,
+        role: request.user.role,
+        isActive: true,
+        checklistOnly: true,
+        employee
+      };
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: request.user.id },
       include: { employee: true }
@@ -76,7 +101,96 @@ export async function authRoutes(app: FastifyInstance) {
       email: user.email,
       role: user.role,
       isActive: user.isActive,
+      checklistOnly: false,
       employee: user.employee
+    };
+  });
+
+  app.post("/auth/checklist-access-link", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== UserRole.ADMIN) {
+      return reply.code(403).send({ message: "Somente administradores podem gerar link de checklist" });
+    }
+
+    const body = z
+      .object({
+        employeeId: z.string().cuid()
+      })
+      .parse(request.body);
+
+    const employee = await prisma.employee.findUnique({
+      where: { id: body.employeeId }
+    });
+    if (!employee || !employee.isActive) {
+      return reply.code(404).send({ message: "Funcionario nao encontrado ou inativo" });
+    }
+
+    const token = await reply.jwtSign(
+      {
+        id: `checklist-link:${employee.id}`,
+        employeeId: employee.id,
+        role: UserRole.OPERADOR,
+        email: employee.email ?? `checklist+${employee.registration}@smartcheck.local`,
+        checklistOnly: true,
+        tokenType: "CHECKLIST_LINK"
+      }
+    );
+
+    return {
+      token,
+      employee: {
+        id: employee.id,
+        name: employee.name,
+        registration: employee.registration
+      }
+    };
+  });
+
+  app.post("/auth/checklist-link-login", async (request, reply) => {
+    const body = z
+      .object({
+        token: z.string().min(20)
+      })
+      .parse(request.body);
+
+    let payload: any;
+    try {
+      payload = await app.jwt.verify(body.token);
+    } catch {
+      return reply.code(401).send({ message: "Link invalido ou expirado" });
+    }
+
+    if (!payload?.checklistOnly || payload?.tokenType !== "CHECKLIST_LINK" || !payload?.employeeId) {
+      return reply.code(401).send({ message: "Link invalido para acesso de checklist" });
+    }
+
+    const employee = await prisma.employee.findUnique({
+      where: { id: payload.employeeId }
+    });
+    if (!employee || !employee.isActive) {
+      return reply.code(401).send({ message: "Funcionario vinculado ao link esta inativo" });
+    }
+
+    const sessionToken = await reply.jwtSign(
+      {
+        id: `checklist-session:${employee.id}`,
+        employeeId: employee.id,
+        role: UserRole.OPERADOR,
+        email: employee.email ?? `checklist+${employee.registration}@smartcheck.local`,
+        checklistOnly: true,
+        tokenType: "SESSION"
+      }
+    );
+
+    return {
+      token: sessionToken,
+      user: {
+        id: `checklist-session:${employee.id}`,
+        email: employee.email ?? `checklist+${employee.registration}@smartcheck.local`,
+        role: UserRole.OPERADOR,
+        isActive: true,
+        checklistOnly: true,
+        employee
+      }
     };
   });
 

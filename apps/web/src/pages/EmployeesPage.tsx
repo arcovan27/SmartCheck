@@ -258,6 +258,23 @@ export function EmployeesPage() {
     }
   });
 
+  const checklistLinkMutation = useMutation({
+    mutationFn: (employeeId: string) =>
+      apiRequest<{ token: string }>("/auth/checklist-access-link", {
+        method: "POST",
+        body: JSON.stringify({ employeeId })
+      }),
+    onSuccess: async (result) => {
+      const link = `${window.location.origin}/login?checklistToken=${encodeURIComponent(result.token)}`;
+      try {
+        await navigator.clipboard.writeText(link);
+        setActionMessage("Link de checklist gerado e copiado para a area de transferencia.");
+      } catch {
+        setActionMessage(`Link de checklist gerado: ${link}`);
+      }
+    }
+  });
+
   const enrollWithAgent = useMutation({
     mutationFn: async (employeeId: string) => {
       const token = localStorage.getItem("smartcheck.token");
@@ -446,7 +463,8 @@ export function EmployeesPage() {
           deleteOccurrenceMutation.isError ||
           enrollWithAgent.isError ||
           deleteBiometric.isError ||
-          testIdentifyWithAgent.isError) && (
+          testIdentifyWithAgent.isError ||
+          checklistLinkMutation.isError) && (
           <div
             className={`rounded-xl p-3 text-sm ${
               statusMutation.isError ||
@@ -455,7 +473,8 @@ export function EmployeesPage() {
               deleteOccurrenceMutation.isError ||
               enrollWithAgent.isError ||
               deleteBiometric.isError ||
-              testIdentifyWithAgent.isError
+              testIdentifyWithAgent.isError ||
+              checklistLinkMutation.isError
                 ? "bg-red-50 text-red-700"
                 : "bg-emerald-50 text-emerald-700"
             }`}
@@ -474,6 +493,8 @@ export function EmployeesPage() {
                     ? (deleteBiometric.error as Error).message
                     : testIdentifyWithAgent.isError
                       ? (testIdentifyWithAgent.error as Error).message
+                      : checklistLinkMutation.isError
+                        ? (checklistLinkMutation.error as Error).message
                 : actionMessage}
           </div>
         )}
@@ -512,6 +533,14 @@ export function EmployeesPage() {
                   onClick={() => loadEmployee(employee)}
                 >
                   Ocorrencias
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => checklistLinkMutation.mutate(employee.id)}
+                  disabled={checklistLinkMutation.isPending}
+                >
+                  {checklistLinkMutation.isPending ? "Gerando link..." : "Link checklist"}
                 </button>
                 <button
                   type="button"
