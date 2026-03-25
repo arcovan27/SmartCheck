@@ -3,6 +3,23 @@ import { ConfirmationMethod, EpiMovementType, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 
+function parseDeliveryDate(value?: string | Date) {
+  if (!value) return new Date();
+  if (value instanceof Date) return value;
+
+  const normalized = String(value).trim();
+  const dateOnlyMatch = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const year = Number(dateOnlyMatch[1]);
+    const month = Number(dateOnlyMatch[2]);
+    const day = Number(dateOnlyMatch[3]);
+    // Salva como meia-noite de Sao Paulo em UTC para nao virar "dia anterior 21:00".
+    return new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
+  }
+
+  return new Date(normalized);
+}
+
 export async function epiRoutes(app: FastifyInstance) {
   app.get("/epis", { preHandler: [app.authenticate] }, async (request) => {
     const query = z
@@ -161,7 +178,7 @@ export async function epiRoutes(app: FastifyInstance) {
         epiId: z.string().cuid(),
         movementType: z.nativeEnum(EpiMovementType).default(EpiMovementType.ENTREGA),
         quantity: z.number().int().positive(),
-        date: z.coerce.date().optional(),
+        date: z.union([z.string(), z.date()]).optional(),
         notes: z.string().optional().nullable(),
         confirmationMethod: z.nativeEnum(ConfirmationMethod),
         confirmationBiometricId: z.string().optional().nullable(),
@@ -197,7 +214,7 @@ export async function epiRoutes(app: FastifyInstance) {
           epiId: body.epiId,
           movementType: body.movementType,
           quantity: body.quantity,
-          date: body.date ?? new Date(),
+          date: parseDeliveryDate(body.date),
           responsibleUserId: request.user.id,
           notes: body.notes,
           confirmationMethod: body.confirmationMethod,
