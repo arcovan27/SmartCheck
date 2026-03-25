@@ -38,8 +38,8 @@ export function DashboardPage() {
   const { cards } = summaryQuery.data;
 
   const cardItems: CardItem[] = [
-    { label: "Funcionarios Ativos", value: cards.activeEmployees, tone: "text-cyan-700" },
-    { label: "EPIs Cadastrados", value: cards.totalEpis, tone: "text-cyan-700" },
+    { label: "Funcionarios Ativos", value: cards.activeEmployees, tone: "text-cyan-700", to: "/funcionarios" },
+    { label: "EPIs Cadastrados", value: cards.totalEpis, tone: "text-cyan-700", to: "/epi" },
     {
       label: "EPIs em Estoque Minimo",
       value: cards.lowStockEpis,
@@ -47,8 +47,8 @@ export function DashboardPage() {
       to: "/epi?filtro=estoque-minimo",
       isAlert: true
     },
-    { label: "Equipamentos Ativos", value: cards.activeEquipments, tone: "text-cyan-700" },
-    { label: "Manutencoes em Aberto", value: cards.openMaintenances, tone: "text-red-700" },
+    { label: "Equipamentos Ativos", value: cards.activeEquipments, tone: "text-cyan-700", to: "/equipamentos" },
+    { label: "Manutencoes em Aberto", value: cards.openMaintenances, tone: "text-red-700", to: "/manutencao" },
     {
       label: "Checklists Pendentes",
       value: cards.pendingChecklists,
