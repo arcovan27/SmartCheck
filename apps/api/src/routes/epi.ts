@@ -10,11 +10,23 @@ function parseDeliveryDate(value?: string | Date) {
   const normalized = String(value).trim();
   const dateOnlyMatch = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dateOnlyMatch) {
-    const year = Number(dateOnlyMatch[1]);
-    const month = Number(dateOnlyMatch[2]);
-    const day = Number(dateOnlyMatch[3]);
-    // Salva como meia-noite de Sao Paulo em UTC para nao virar "dia anterior 21:00".
-    return new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
+    const year = dateOnlyMatch[1];
+    const month = dateOnlyMatch[2];
+    const day = dateOnlyMatch[3];
+
+    // Mantem a data escolhida e aplica a hora atual de Sao Paulo (GMT-3).
+    const nowSp = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    })
+      .format(new Date())
+      .replace(/[^\d:]/g, "");
+    const [hour = "00", minute = "00", second = "00"] = nowSp.split(":");
+
+    return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}-03:00`);
   }
 
   return new Date(normalized);
