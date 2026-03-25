@@ -8,7 +8,8 @@ import { roleLabels } from "../lib/constants";
 const dashboardMenu = [
   { to: "/", label: "Dashboard" },
   { to: "/entrega-epi", label: "Entrega de EPI" },
-  { to: "/execucao-checklist", label: "Execucao de Checklist" }
+  { to: "/execucao-checklist", label: "Execucao de Checklist" },
+  { to: "/downloads", label: "Downloads" }
 ];
 
 const cadastroMenu = [

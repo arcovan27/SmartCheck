@@ -5,6 +5,42 @@ import { useAuth } from "../lib/auth";
 
 const defaultPrintTerm =
   "Recebi da Empresa Acima, os EPI's abaixo relacionados, que sao fornecidos gratuitamente nos termos do Art 166 da C.L.T e item 6.2.1.2 da NR-6 da portaria 3.214 de 08/06/78, declaro ainda estar ciente que de acordo com art. 158, Paragrafo unico, letra \"b\" da CLT e item 6.3 da NR-6 da mesma portaria, que devo usar, obrigatoriamente estes EPI's durante toda jornada de trabalho, responsabilizar-me pela sua guarda e conservacao, comunicar ao Dep. De Pessoal, qualquer alteracao que os tornem danificados ou extraviados. Atesto ainda estar orientado e treinado da utilizacao correta destes EPI's abaixo relacionados.";
+const BRAZIL_TZ = "America/Sao_Paulo";
+
+function toBrazilDateInputValue(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BRAZIL_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+  const month = parts.find((part) => part.type === "month")?.value ?? "01";
+  const day = parts.find((part) => part.type === "day")?.value ?? "01";
+  return `${year}-${month}-${day}`;
+}
+
+function formatBrazilDate(value: string | Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: BRAZIL_TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(new Date(value));
+}
+
+function formatBrazilDateTime(value: string | Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: BRAZIL_TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).format(new Date(value));
+}
 
 function escapeHtml(value: string) {
   return value
@@ -27,7 +63,7 @@ export function EntregaEpiPage() {
     epiId: "",
     movementType: "ENTREGA",
     quantity: 1,
-    date: new Date().toISOString().slice(0, 10),
+    date: toBrazilDateInputValue(),
     notes: "",
     confirmationMethod: "BIOMETRIA",
     confirmationBiometricId: "",
@@ -215,7 +251,7 @@ export function EntregaEpiPage() {
             <td>${escapeHtml(item.epi?.ca ?? "-")}</td>
             <td>${escapeHtml(item.movementType ?? "-")}</td>
             <td>${escapeHtml(String(item.quantity ?? "-"))}</td>
-            <td>${escapeHtml(new Date(item.date).toLocaleDateString("pt-BR"))}</td>
+            <td>${escapeHtml(formatBrazilDate(item.date))}</td>
           </tr>
         `
       )
@@ -259,7 +295,7 @@ export function EntregaEpiPage() {
           <p><strong>Funcionario:</strong> ${escapeHtml(employee.name ?? "-")}</p>
           <p><strong>Matricula:</strong> ${escapeHtml(employee.registration ?? "-")}</p>
           <p><strong>Setor:</strong> ${escapeHtml(employee.department ?? "-")} | <strong>Funcao:</strong> ${escapeHtml(employee.position ?? "-")}</p>
-          <p><strong>Data da entrega:</strong> ${escapeHtml(new Date(targetDelivery.date).toLocaleString("pt-BR"))}</p>
+          <p><strong>Data da entrega:</strong> ${escapeHtml(formatBrazilDateTime(targetDelivery.date))}</p>
           <div class="term">
             <p><strong>Termo:</strong> ${escapeHtml(printTerm)}</p>
           </div>
@@ -424,7 +460,7 @@ export function EntregaEpiPage() {
                   {movement.movementType} | Quantidade: {movement.quantity} | Assinado por:{" "}
                   {movement.employeeSignatureName}
                 </p>
-                <p className="text-slate-500">{new Date(movement.date).toLocaleString("pt-BR")}</p>
+                <p className="text-slate-500">{formatBrazilDateTime(movement.date)}</p>
               </div>
             ))}
           </div>
@@ -493,7 +529,7 @@ export function EntregaEpiPage() {
                     Confirmacao: {item.confirmationMethod} | Assinatura funcionario:{" "}
                     {item.employeeSignatureName}
                   </p>
-                  <p className="text-slate-500">{new Date(item.date).toLocaleString("pt-BR")}</p>
+                  <p className="text-slate-500">{formatBrazilDateTime(item.date)}</p>
                   <button
                     type="button"
                     className="btn-secondary mt-2"

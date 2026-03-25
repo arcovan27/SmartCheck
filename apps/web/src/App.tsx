@@ -5,6 +5,7 @@ import { AuthProvider } from "./lib/auth";
 import { ChecklistsPage } from "./pages/ChecklistsPage";
 import { CompanyPage } from "./pages/CompanyPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { DownloadsPage } from "./pages/DownloadsPage";
 import { EmployeesPage } from "./pages/EmployeesPage";
 import { EntregaEpiPage } from "./pages/EntregaEpiPage";
 import { ExecucaoChecklistPage } from "./pages/ExecucaoChecklistPage";
@@ -30,6 +31,7 @@ export default function App() {
             <Route index element={<DashboardPage />} />
             <Route path="entrega-epi" element={<EntregaEpiPage />} />
             <Route path="execucao-checklist" element={<ExecucaoChecklistPage />} />
+            <Route path="downloads" element={<DownloadsPage />} />
             <Route path="empresa" element={<CompanyPage />} />
             <Route path="funcionarios" element={<EmployeesPage />} />
             <Route path="epi" element={<EpiPage />} />

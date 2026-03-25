@@ -38,6 +38,12 @@ await app.register(fastifyStatic, {
   prefix: "/files/"
 });
 
+await app.register(fastifyStatic, {
+  root: path.resolve(process.cwd(), "downloads"),
+  prefix: "/downloads/",
+  decorateReply: false
+});
+
 await app.register(authPlugin);
 
 app.get("/health", async () => ({ status: "ok" }));
