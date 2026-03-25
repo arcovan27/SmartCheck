@@ -5,8 +5,8 @@ import { useAuth } from "../lib/auth";
 export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [email, setEmail] = useState("admin@smartcheck.local");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -49,12 +49,6 @@ export function LoginPage() {
         </div>
 
         {error && <p className="mt-3 rounded-xl bg-red-100 p-2 text-sm text-red-700">{error}</p>}
-
-        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-3 text-sm text-slate-300">
-          <p className="font-semibold text-white">Usuário inicial</p>
-          <p>Login: admin@smartcheck.local</p>
-          <p>Senha: admin123</p>
-        </div>
 
         <button className="btn-primary mt-4 w-full" disabled={loading}>
           {loading ? "Entrando..." : "Entrar"}
