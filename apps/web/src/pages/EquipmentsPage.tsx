@@ -1,6 +1,7 @@
 ﻿import { FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/api";
+import { formatBrazilDateTime } from "../lib/datetime";
 
 const initialForm = {
   name: "",
@@ -212,7 +213,7 @@ export function EquipmentsPage() {
                   <div key={execution.id} className="rounded-xl border border-slate-200 p-3 text-sm">
                     <p className="font-semibold">{execution.template.name}</p>
                     <p>
-                      {execution.hadProblem ? "Com problema" : "Sem problema"} • {new Date(execution.executedAt).toLocaleString("pt-BR")}
+                      {execution.hadProblem ? "Com problema" : "Sem problema"} • {formatBrazilDateTime(execution.executedAt)}
                     </p>
                     {execution.items?.length > 0 &&
                       execution.items.map((item: any) => (
@@ -241,3 +242,7 @@ export function EquipmentsPage() {
     </div>
   );
 }
+
+
+
+

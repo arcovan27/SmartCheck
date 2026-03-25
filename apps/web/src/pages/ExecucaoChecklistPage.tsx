@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, getUploadedFileUrl, uploadFile } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { formatBrazilDateTime, getBrazilMonthYearReference } from "../lib/datetime";
 
 type ChecklistCode =
   | "PRENSA_TUBOS_MANUAL_01"
@@ -39,9 +40,7 @@ export function ExecucaoChecklistPage() {
   const [equipmentId, setEquipmentId] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [items, setItems] = useState<Record<string, ItemState>>({});
-  const [monthReference, setMonthReference] = useState(
-    `${String(new Date().getMonth() + 1).padStart(2, "0")}/${new Date().getFullYear()}`
-  );
+  const [monthReference, setMonthReference] = useState(getBrazilMonthYearReference());
   const [operatorName, setOperatorName] = useState(user?.employee?.name ?? "");
   const [secondaryOperatorName, setSecondaryOperatorName] = useState("");
   const [hourmeterValue, setHourmeterValue] = useState("");
@@ -373,7 +372,7 @@ export function ExecucaoChecklistPage() {
                 {equipmentHistoryQuery.data.checklists.slice(0, 8).map((execution: any) => (
                   <div key={execution.id} className="rounded-lg border border-slate-200 p-2 text-sm">
                     <p className="font-semibold">{execution.template.name}</p>
-                    <p className="text-slate-600">{new Date(execution.executedAt).toLocaleString("pt-BR")}</p>
+                    <p className="text-slate-600">{formatBrazilDateTime(execution.executedAt)}</p>
                     <p className={execution.hadProblem ? "text-red-700" : "text-emerald-700"}>
                       {execution.hadProblem ? "Com falha" : "Sem falha"}
                     </p>

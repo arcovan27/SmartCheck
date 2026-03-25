@@ -2,45 +2,10 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL, apiRequest } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { formatBrazilDate, formatBrazilDateTime, toBrazilDateInputValue } from "../lib/datetime";
 
 const defaultPrintTerm =
   "Recebi da Empresa Acima, os EPI's abaixo relacionados, que sao fornecidos gratuitamente nos termos do Art 166 da C.L.T e item 6.2.1.2 da NR-6 da portaria 3.214 de 08/06/78, declaro ainda estar ciente que de acordo com art. 158, Paragrafo unico, letra \"b\" da CLT e item 6.3 da NR-6 da mesma portaria, que devo usar, obrigatoriamente estes EPI's durante toda jornada de trabalho, responsabilizar-me pela sua guarda e conservacao, comunicar ao Dep. De Pessoal, qualquer alteracao que os tornem danificados ou extraviados. Atesto ainda estar orientado e treinado da utilizacao correta destes EPI's abaixo relacionados.";
-const BRAZIL_TZ = "America/Sao_Paulo";
-
-function toBrazilDateInputValue(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BRAZIL_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).formatToParts(date);
-  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
-  const month = parts.find((part) => part.type === "month")?.value ?? "01";
-  const day = parts.find((part) => part.type === "day")?.value ?? "01";
-  return `${year}-${month}-${day}`;
-}
-
-function formatBrazilDate(value: string | Date) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: BRAZIL_TZ,
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).format(new Date(value));
-}
-
-function formatBrazilDateTime(value: string | Date) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: BRAZIL_TZ,
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  }).format(new Date(value));
-}
 
 function escapeHtml(value: string) {
   return value
@@ -512,7 +477,7 @@ export function EntregaEpiPage() {
                 Admissao:{" "}
                 <strong>
                   {reportQuery.data.employee.admissionDate
-                    ? new Date(reportQuery.data.employee.admissionDate).toLocaleDateString("pt-BR")
+                    ? formatBrazilDate(reportQuery.data.employee.admissionDate)
                     : "-"}
                 </strong>
               </p>

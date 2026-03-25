@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL, apiRequest, getUploadedFileUrl, uploadFile } from "../lib/api";
 import { roleLabels } from "../lib/constants";
+import { formatBrazilDate, toBrazilDateInputValue } from "../lib/datetime";
 import type { UserRole } from "../lib/auth";
 
 type Employee = {
@@ -71,7 +72,7 @@ export function EmployeesPage() {
   const [actionMessage, setActionMessage] = useState("");
   const [occurrenceForm, setOccurrenceForm] = useState({
     type: "OUTRO",
-    date: new Date().toISOString().slice(0, 10),
+    date: toBrazilDateInputValue(),
     description: "",
     daysAway: "",
     notes: ""
@@ -220,7 +221,7 @@ export function EmployeesPage() {
       setActionMessage("Ocorrencia registrada com sucesso.");
       setOccurrenceForm({
         type: "OUTRO",
-        date: new Date().toISOString().slice(0, 10),
+        date: toBrazilDateInputValue(),
         description: "",
         daysAway: "",
         notes: ""
@@ -868,7 +869,7 @@ export function EmployeesPage() {
                         {occurrenceTypeLabels[occurrence.type] ?? occurrence.type}
                       </p>
                       <p className="text-slate-600">
-                        {new Date(occurrence.date).toLocaleDateString("pt-BR")}
+                        {formatBrazilDate(occurrence.date)}
                         {occurrence.daysAway ? ` • ${occurrence.daysAway} dia(s) afastado` : ""}
                       </p>
                       <p>{occurrence.description}</p>
@@ -936,13 +937,13 @@ export function EmployeesPage() {
             <div className="space-y-2">
               {employeeDetailsQuery.data.epiMovements.slice(0, 5).map((item: any) => (
                 <p key={item.id} className="text-sm">
-                  EPI: {item.epi.name} | {item.movementType} | {new Date(item.date).toLocaleDateString("pt-BR")}
+                  EPI: {item.epi.name} | {item.movementType} | {formatBrazilDate(item.date)}
                 </p>
               ))}
               {employeeDetailsQuery.data.checklistExecutions.slice(0, 5).map((item: any) => (
                 <p key={item.id} className="text-sm">
                   Checklist: {item.template.name} ({item.equipment.name}) |{" "}
-                  {new Date(item.executedAt).toLocaleDateString("pt-BR")}
+                  {formatBrazilDate(item.executedAt)}
                 </p>
               ))}
             </div>

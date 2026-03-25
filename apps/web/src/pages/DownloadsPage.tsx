@@ -25,28 +25,8 @@ const driverItems = [
 
 const agentItems = [
   {
-    label: "Agente biometrico (JAR)",
-    href: buildDownloadUrl("agent-biometrico/SmartCheckBiometricAgent.jar")
-  },
-  {
-    label: "Executar agente (CMD)",
-    href: buildDownloadUrl("agent-biometrico/run-agent.cmd")
-  },
-  {
-    label: "Executar agente (PowerShell)",
-    href: buildDownloadUrl("agent-biometrico/run-agent.ps1")
-  },
-  {
-    label: "Instalar auto start",
-    href: buildDownloadUrl("agent-biometrico/install-autostart.cmd")
-  },
-  {
-    label: "Remover auto start",
-    href: buildDownloadUrl("agent-biometrico/remove-autostart.cmd")
-  },
-  {
-    label: "Guia rapido (README)",
-    href: buildDownloadUrl("agent-biometrico/README.md")
+    label: "Baixar pacote completo do agente (.zip)",
+    href: buildDownloadUrl("agent-biometrico/SmartCheck-Agent-Biometrico.zip")
   }
 ];
 
@@ -85,7 +65,7 @@ export function DownloadsPage() {
       />
       <DownloadList
         title="Downloads do Agente"
-        description="Agente local e scripts para iniciar automaticamente no computador."
+        description="Pacote unico com agente + scripts. Extraia o ZIP antes de executar o install-autostart.cmd."
         items={agentItems}
       />
     </div>

@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../lib/api";
+import { formatBrazilDateTime, toBrazilDateInputValue } from "../lib/datetime";
 
 type Epi = {
   id: string;
@@ -138,7 +139,7 @@ export function EpiPage() {
         <body>
           <h1>Lista de compra de EPI</h1>
           <p><strong>Empresa:</strong> ${companyName} | <strong>CNPJ:</strong> ${companyCnpj}</p>
-          <p>Gerado em: ${new Date().toLocaleString("pt-BR")}</p>
+          <p>Gerado em: ${formatBrazilDateTime(new Date())}</p>
           <table>
             <thead>
               <tr>
@@ -231,7 +232,7 @@ export function EpiPage() {
       description: epi.description ?? "",
       ca: epi.ca ?? "",
       category: epi.category ?? "",
-      validityDate: epi.validityDate ? new Date(epi.validityDate).toISOString().slice(0, 10) : "",
+      validityDate: epi.validityDate ? toBrazilDateInputValue(new Date(epi.validityDate)) : "",
       unit: epi.unit ?? "UN",
       purchasePrice: epi.purchasePrice === null || epi.purchasePrice === undefined ? "" : String(epi.purchasePrice),
       stock: Number(epi.stock ?? 0),
