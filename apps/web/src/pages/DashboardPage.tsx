@@ -24,7 +24,9 @@ type CardItem = {
 export function DashboardPage() {
   const summaryQuery = useQuery({
     queryKey: ["dashboard-summary"],
-    queryFn: () => apiRequest<DashboardResponse>("/dashboard/summary")
+    queryFn: () => apiRequest<DashboardResponse>("/dashboard/summary"),
+    refetchInterval: 30000,
+    refetchIntervalInBackground: true
   });
 
   if (summaryQuery.isLoading) {
