@@ -9,6 +9,7 @@ const dashboardMenu = [
   { to: "/", label: "Dashboard" },
   { to: "/entrega-epi", label: "Entrega de EPI" },
   { to: "/execucao-checklist", label: "Execucao de Checklist" },
+  { to: "/historico-checklist", label: "Historico de Checklist" },
   { to: "/downloads", label: "Downloads" }
 ];
 
@@ -32,7 +33,10 @@ export function AppLayout() {
   });
   const companyName = companyQuery.data?.tradeName || companyQuery.data?.legalName || "";
   const visibleDashboardMenu = isChecklistOnly
-    ? [{ to: "/execucao-checklist", label: "Execucao de Checklist" }]
+    ? [
+        { to: "/execucao-checklist", label: "Execucao de Checklist" },
+        { to: "/historico-checklist", label: "Historico de Checklist" }
+      ]
     : dashboardMenu;
 
   return (

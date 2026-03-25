@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, getUploadedFileUrl, uploadFile } from "../lib/api";
+import { apiRequest, uploadFile } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { formatBrazilDateTime, getBrazilMonthYearReference } from "../lib/datetime";
+import { getBrazilMonthYearReference } from "../lib/datetime";
 
 type ChecklistCode =
   | "PRENSA_TUBOS_MANUAL_01"
@@ -37,6 +37,7 @@ function periodicityLabel(periodicity: string) {
 export function ExecucaoChecklistPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const [actionMessage, setActionMessage] = useState("");
   const [equipmentId, setEquipmentId] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [items, setItems] = useState<Record<string, ItemState>>({});
@@ -48,9 +49,6 @@ export function ExecucaoChecklistPage() {
   const [workingHoursStartMonth, setWorkingHoursStartMonth] = useState("");
   const [fuelLevel, setFuelLevel] = useState("");
   const [notes, setNotes] = useState("");
-  const [openedHistoryDetails, setOpenedHistoryDetails] = useState<Record<string, boolean>>({});
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-  const [previewZoomed, setPreviewZoomed] = useState(false);
 
   const equipmentsQuery = useQuery({ queryKey: ["equipments"], queryFn: () => apiRequest<any[]>("/equipments") });
   const templatesQuery = useQuery({
@@ -59,11 +57,6 @@ export function ExecucaoChecklistPage() {
       equipmentId
         ? apiRequest<any[]>(`/checklist-templates?equipmentId=${equipmentId}`)
         : Promise.resolve([])
-  });
-  const equipmentHistoryQuery = useQuery({
-    queryKey: ["equipment-history", equipmentId],
-    queryFn: () => apiRequest<any>(`/history/equipment/${equipmentId}`),
-    enabled: Boolean(equipmentId)
   });
 
   const selectedTemplate = useMemo(
@@ -97,10 +90,19 @@ export function ExecucaoChecklistPage() {
     mutationFn: (payload: any) =>
       apiRequest("/checklist-executions", { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: () => {
+      setActionMessage("Checklist registrado com sucesso.");
       queryClient.invalidateQueries({ queryKey: ["checklist-executions"] });
       queryClient.invalidateQueries({ queryKey: ["maintenances"] });
       queryClient.invalidateQueries({ queryKey: ["equipment-history"] });
+      setEquipmentId("");
+      setTemplateId("");
       setItems({});
+      setMonthReference(getBrazilMonthYearReference());
+      setSecondaryOperatorName("");
+      setHourmeterValue("");
+      setMileageValue("");
+      setWorkingHoursStartMonth("");
+      setFuelLevel("");
       setNotes("");
     }
   });
@@ -181,6 +183,7 @@ export function ExecucaoChecklistPage() {
             className="select"
             value={equipmentId}
             onChange={(e) => {
+              setActionMessage("");
               setEquipmentId(e.target.value);
               setItems({});
             }}
@@ -352,141 +355,13 @@ export function ExecucaoChecklistPage() {
             <button className="btn-primary w-full py-3 text-base" disabled={createExecution.isPending}>
               {createExecution.isPending ? "Enviando checklist..." : "Finalizar checklist e registrar operacao"}
             </button>
+            {actionMessage && <p className="text-sm text-emerald-700">{actionMessage}</p>}
             {createExecution.isError && (
               <p className="text-sm text-red-700">{(createExecution.error as Error).message}</p>
             )}
           </>
         )}
       </form>
-
-      <section className="card space-y-3">
-        <h2 className="section-title">Historico operacional do equipamento</h2>
-        {!equipmentId && (
-          <p className="text-sm text-slate-500">Selecione um equipamento para consultar o historico operacional.</p>
-        )}
-        {equipmentHistoryQuery.data && (
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 p-3">
-              <h3 className="mb-2 font-semibold">Ultimos checklists</h3>
-              <div className="space-y-2">
-                {equipmentHistoryQuery.data.checklists.slice(0, 8).map((execution: any) => (
-                  <div key={execution.id} className="rounded-lg border border-slate-200 p-2 text-sm">
-                    <p className="font-semibold">{execution.template.name}</p>
-                    <p className="text-slate-600">{formatBrazilDateTime(execution.executedAt)}</p>
-                    <p className={execution.hadProblem ? "text-red-700" : "text-emerald-700"}>
-                      {execution.hadProblem ? "Com falha" : "Sem falha"}
-                    </p>
-                    {execution.hadProblem && execution.items?.length > 0 && (
-                      <div className="mt-2">
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          onClick={() =>
-                            setOpenedHistoryDetails((prev) => ({
-                              ...prev,
-                              [execution.id]: !prev[execution.id]
-                            }))
-                          }
-                        >
-                          {openedHistoryDetails[execution.id] ? "Ocultar falhas" : "Ver falhas"}
-                        </button>
-
-                        {openedHistoryDetails[execution.id] && (
-                          <div className="mt-2 space-y-2 rounded-xl border border-red-200 bg-red-50 p-2">
-                            {execution.items.map((problemItem: any) => (
-                              <div key={problemItem.id} className="rounded-lg border border-red-200 bg-white p-2">
-                                <p className="font-semibold text-red-800">{problemItem.templateItem?.label ?? "Item"}</p>
-                                <p className="text-sm text-slate-700">
-                                  Observacao: {problemItem.observation?.trim() ? problemItem.observation : "-"}
-                                </p>
-                                {problemItem.attachments?.length > 0 && (
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    {problemItem.attachments.map((attachment: any) => {
-                                      const imageUrl = getUploadedFileUrl(attachment.path);
-                                      if (!imageUrl) return null;
-                                      return (
-                                        <button
-                                          key={attachment.id}
-                                          className="block"
-                                          type="button"
-                                          onClick={() => {
-                                            setPreviewImageUrl(imageUrl);
-                                            setPreviewZoomed(false);
-                                          }}
-                                        >
-                                          <img
-                                            src={imageUrl}
-                                            alt="Foto da falha"
-                                            className="h-16 w-16 rounded-md border border-slate-200 object-cover"
-                                          />
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 p-3">
-              <h3 className="mb-2 font-semibold">Manutencoes e preventivas</h3>
-              <div className="space-y-2">
-                {equipmentHistoryQuery.data.maintenances.slice(0, 8).map((maintenance: any) => (
-                  <div key={maintenance.id} className="rounded-lg border border-slate-200 p-2 text-sm">
-                    <p className="font-semibold">{maintenance.description}</p>
-                    <p className="text-slate-600">
-                      {maintenance.type} | {maintenance.status}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 space-y-2">
-                {equipmentHistoryQuery.data.planAlerts.map((planAlert: any) => (
-                  <div key={planAlert.plan.id} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm">
-                    <p className="font-semibold">{planAlert.plan.title}</p>
-                    <p>
-                      Proxima preventiva: {planAlert.alert.state} ({Number(planAlert.alert.currentValue).toFixed(1)} /{" "}
-                      {Number(planAlert.alert.threshold).toFixed(1)})
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {previewImageUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => {
-            setPreviewImageUrl(null);
-            setPreviewZoomed(false);
-          }}
-        >
-          <div className="relative">
-            <img
-              src={previewImageUrl}
-              alt="Visualizacao da falha"
-              className={`rounded-lg border border-slate-200 bg-white object-contain transition ${
-                previewZoomed ? "max-h-none max-w-none scale-[1.8] cursor-zoom-out" : "max-h-[90vh] max-w-[90vw] cursor-zoom-in"
-              }`}
-              onClick={(event) => event.stopPropagation()}
-              onDoubleClick={(event) => {
-                event.stopPropagation();
-                setPreviewZoomed((prev) => !prev);
-              }}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
