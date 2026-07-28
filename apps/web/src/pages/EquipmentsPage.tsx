@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/api";
 import { formatBrazilDateTime } from "../lib/datetime";
+import { formatChecklistReadings } from "../lib/checklistReadings";
 
 const initialForm = {
   name: "",
@@ -217,6 +218,11 @@ export function EquipmentsPage() {
                     <p>
                       {execution.hadProblem ? "Com problema" : "Sem problema"} • {formatBrazilDateTime(execution.executedAt)}
                     </p>
+                    {formatChecklistReadings(execution).map((reading) => (
+                      <p key={reading} className="text-xs font-medium text-slate-700">
+                        {reading}
+                      </p>
+                    ))}
                     {execution.items?.length > 0 &&
                       execution.items.map((item: any) => (
                         <p key={item.id} className="text-xs text-slate-600">

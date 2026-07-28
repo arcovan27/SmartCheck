@@ -39,6 +39,13 @@ enum ChecklistPeriodicity {
   MENSAL
 }
 
+enum ChecklistReadingMode {
+  NONE
+  HOURMETER
+  MILEAGE
+  BOTH
+}
+
 enum ChecklistTemplateCode {
   PRENSA_TUBOS_MANUAL_01
   PRENSA_TUBOS_MANUAL_02
@@ -254,6 +261,7 @@ model ChecklistTemplate {
   name          String
   description   String?
   periodicity   ChecklistPeriodicity
+  readingMode   ChecklistReadingMode   @default(NONE)
   equipmentId   String?
   equipment     Equipment?           @relation("ChecklistTemplateLegacyEquipment", fields: [equipmentId], references: [id])
   isActive      Boolean              @default(true)
@@ -306,6 +314,7 @@ model ChecklistExecution {
   employeeId  String
   employee    Employee           @relation(fields: [employeeId], references: [id])
   executedAt  DateTime           @default(now())
+  readingMode ChecklistReadingMode @default(NONE)
   monthReference String?
   operatorName String?
   secondaryOperatorName String?

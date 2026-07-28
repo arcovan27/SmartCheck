@@ -8,6 +8,7 @@ import {
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { evaluatePlan } from "../services/maintenanceAlerts.js";
+import { checklistReadingsForResponse } from "../services/checklistReadings.js";
 
 export async function maintenanceRoutes(app: FastifyInstance) {
   app.get("/maintenances", { preHandler: [app.authenticate] }, async (request) => {
@@ -220,6 +221,14 @@ export async function maintenanceRoutes(app: FastifyInstance) {
         }))
       : [];
 
-    return { checklists, maintenances, plans, planAlerts };
+    return {
+      checklists: checklists.map((execution) => ({
+        ...execution,
+        readings: checklistReadingsForResponse(execution)
+      })),
+      maintenances,
+      plans,
+      planAlerts
+    };
   });
 }

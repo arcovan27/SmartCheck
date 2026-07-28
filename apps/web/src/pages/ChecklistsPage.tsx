@@ -1,6 +1,11 @@
 import { FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/api";
+import { useAuth } from "../lib/auth";
+import {
+  checklistReadingModeLabels,
+  type ChecklistReadingMode
+} from "../lib/checklistReadings";
 
 type TemplateItem = {
   id?: string;
@@ -12,6 +17,7 @@ const emptyForm = {
   name: "",
   code: "OUTRO" as const,
   periodicity: "DIARIO",
+  readingMode: "NONE" as ChecklistReadingMode,
   equipmentIds: [] as string[],
   description: "",
   items: [{ label: "", section: "Itens de inspecao" }] as TemplateItem[]
@@ -19,14 +25,21 @@ const emptyForm = {
 
 export function ChecklistsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canManageTemplates = user?.role === "ADMIN" && !user.checklistOnly;
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [message, setMessage] = useState("");
 
-  const equipmentsQuery = useQuery({ queryKey: ["equipments"], queryFn: () => apiRequest<any[]>("/equipments") });
+  const equipmentsQuery = useQuery({
+    queryKey: ["equipments"],
+    queryFn: () => apiRequest<any[]>("/equipments"),
+    enabled: canManageTemplates
+  });
   const templatesQuery = useQuery({
     queryKey: ["checklist-templates-models"],
-    queryFn: () => apiRequest<any[]>("/checklist-templates")
+    queryFn: () => apiRequest<any[]>("/checklist-templates"),
+    enabled: canManageTemplates
   });
 
   const saveTemplate = useMutation({
@@ -76,6 +89,7 @@ export function ChecklistsPage() {
       name: form.name,
       code: "OUTRO",
       periodicity: form.periodicity,
+      readingMode: form.readingMode,
       equipmentIds: form.equipmentIds,
       description: form.description || null,
       items: validItems
@@ -102,6 +116,7 @@ export function ChecklistsPage() {
       name: template.name ?? "",
       code: "OUTRO",
       periodicity: template.periodicity ?? "DIARIO",
+      readingMode: template.readingMode ?? "NONE",
       equipmentIds:
         template.equipmentLinks?.length > 0
           ? template.equipmentLinks.map((link: any) => link.equipmentId)
@@ -131,6 +146,15 @@ export function ChecklistsPage() {
     if (!confirmed) return;
     setMessage("");
     deleteTemplate.mutate(template.id);
+  }
+
+  if (!canManageTemplates) {
+    return (
+      <section className="card space-y-2">
+        <h2 className="section-title">Modelos de checklist</h2>
+        <p className="text-sm text-red-700">Somente administradores podem cadastrar ou editar modelos.</p>
+      </section>
+    );
   }
 
   return (
@@ -187,6 +211,28 @@ export function ChecklistsPage() {
             </select>
             <input className="input" value="Modelo livre" disabled />
           </div>
+          <label className="block space-y-1 text-sm font-medium text-slate-700">
+            <span>Leitura solicitada durante a execucao</span>
+            <select
+              className="select"
+              value={form.readingMode}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  readingMode: event.target.value as ChecklistReadingMode
+                }))
+              }
+            >
+              {Object.entries(checklistReadingModeLabels).map(([mode, label]) => (
+                <option key={mode} value={mode}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs font-normal text-slate-500">
+              Quando habilitada, a leitura sera obrigatoria antes da conclusao do checklist.
+            </span>
+          </label>
           <textarea
             className="textarea"
             rows={2}
@@ -283,6 +329,9 @@ export function ChecklistsPage() {
                   ? template.equipmentLinks.map((link: any) => link.equipment?.name).filter(Boolean).join(", ")
                   : template.equipment?.name ?? "-"}{" "}
                 | Periodicidade: {template.periodicity}
+              </p>
+              <p>
+                Leitura: {checklistReadingModeLabels[(template.readingMode ?? "NONE") as ChecklistReadingMode]}
               </p>
               <p>Itens: {template.items?.length ?? 0}</p>
               <div className="mt-2 flex gap-2">

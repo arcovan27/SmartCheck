@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "npm run dev -w @smartcheck/api & npm run dev -w @smartcheck/web",
     "build": "npm run build -w @smartcheck/api && npm run build -w @smartcheck/web",
+    "test": "npm run test -w @smartcheck/api && node --import tsx --test apps/web/tests/*.test.ts",
     "lint": "npm run lint -w @smartcheck/api && npm run lint -w @smartcheck/web",
     "format": "npm run format -w @smartcheck/api && npm run format -w @smartcheck/web"
   }

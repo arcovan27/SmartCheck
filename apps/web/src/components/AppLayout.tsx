@@ -38,6 +38,8 @@ export function AppLayout() {
         { to: "/historico-checklist", label: "Historico de Checklist" }
       ]
     : dashboardMenu;
+  const visibleCadastroMenu =
+    user?.role === "ADMIN" ? cadastroMenu : cadastroMenu.filter((item) => item.to !== "/checklists");
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f5f7fa_0%,#e8edf3_100%)] lg:grid lg:grid-cols-[320px,1fr]">
@@ -83,7 +85,7 @@ export function AppLayout() {
             <section>
               <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Cadastro</p>
               <nav className="grid gap-2">
-                {cadastroMenu.map((item) => {
+                {visibleCadastroMenu.map((item) => {
                   const active = location.pathname === item.to;
                   return (
                     <Link

@@ -3,6 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, uploadFile } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getBrazilMonthYearReference } from "../lib/datetime";
+import {
+  requiresHourmeter,
+  requiresMileage,
+  validateReadingForm,
+  type ChecklistReadingMode
+} from "../lib/checklistReadings";
 
 type ChecklistCode =
   | "PRENSA_TUBOS_MANUAL_01"
@@ -49,6 +55,7 @@ export function ExecucaoChecklistPage() {
   const [workingHoursStartMonth, setWorkingHoursStartMonth] = useState("");
   const [fuelLevel, setFuelLevel] = useState("");
   const [notes, setNotes] = useState("");
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const equipmentsQuery = useQuery({ queryKey: ["equipments"], queryFn: () => apiRequest<any[]>("/equipments") });
   const templatesQuery = useQuery({
@@ -62,6 +69,10 @@ export function ExecucaoChecklistPage() {
   const selectedTemplate = useMemo(
     () => templatesQuery.data?.find((template) => template.id === templateId),
     [templatesQuery.data, templateId]
+  );
+  const selectedEquipment = useMemo(
+    () => equipmentsQuery.data?.find((equipment) => equipment.id === equipmentId),
+    [equipmentsQuery.data, equipmentId]
   );
 
   useEffect(() => {
@@ -94,6 +105,7 @@ export function ExecucaoChecklistPage() {
       queryClient.invalidateQueries({ queryKey: ["checklist-executions"] });
       queryClient.invalidateQueries({ queryKey: ["maintenances"] });
       queryClient.invalidateQueries({ queryKey: ["equipment-history"] });
+      queryClient.invalidateQueries({ queryKey: ["equipments"] });
       setEquipmentId("");
       setTemplateId("");
       setItems({});
@@ -104,6 +116,7 @@ export function ExecucaoChecklistPage() {
       setWorkingHoursStartMonth("");
       setFuelLevel("");
       setNotes("");
+      setValidationErrors([]);
     }
   });
 
@@ -138,14 +151,27 @@ export function ExecucaoChecklistPage() {
   }
 
   const templateCode = selectedTemplate?.code as ChecklistCode | undefined;
-  const requiresVehicleHeader = templateCode === "PA_CARREGADEIRA" || templateCode === "EMPILHADEIRA_SEMANAL";
+  const readingMode = (selectedTemplate?.readingMode ?? "NONE") as ChecklistReadingMode;
+  const showHourmeter = requiresHourmeter(readingMode);
+  const showMileage = requiresMileage(readingMode);
   const requiresSecondOperator = templateCode === "EMPILHADEIRA_SEMANAL";
   const requiresWorkingHoursStart = templateCode === "PA_CARREGADEIRA";
   const requiresFuel = templateCode === "EMPILHADEIRA_SEMANAL";
 
   function submitExecution(event: FormEvent) {
     event.preventDefault();
-    if (!user || !user.employee?.id || !selectedTemplate || !operatorName.trim()) return;
+    setActionMessage("");
+    setValidationErrors([]);
+    if (!user || !user.employee?.id || !selectedTemplate || !operatorName.trim()) {
+      setValidationErrors(["Preencha o equipamento, o checklist e o operador responsavel."]);
+      return;
+    }
+
+    const readingValidation = validateReadingForm(readingMode, hourmeterValue, mileageValue);
+    if (readingValidation.errors.length > 0) {
+      setValidationErrors(readingValidation.errors);
+      return;
+    }
 
     createExecution.mutate({
       templateId,
@@ -154,8 +180,8 @@ export function ExecucaoChecklistPage() {
       monthReference,
       operatorName,
       secondaryOperatorName: secondaryOperatorName || null,
-      hourmeterValue: hourmeterValue ? Number(hourmeterValue) : null,
-      mileageValue: mileageValue ? Number(mileageValue) : null,
+      hourmeterValue: readingValidation.hourmeterValue,
+      mileageValue: readingValidation.mileageValue,
       workingHoursStartMonth: workingHoursStartMonth ? Number(workingHoursStartMonth) : null,
       fuelLevel: fuelLevel || null,
       notes,
@@ -184,6 +210,7 @@ export function ExecucaoChecklistPage() {
             value={equipmentId}
             onChange={(e) => {
               setActionMessage("");
+              setValidationErrors([]);
               setEquipmentId(e.target.value);
               setItems({});
             }}
@@ -248,22 +275,56 @@ export function ExecucaoChecklistPage() {
               )}
             </div>
 
-            {requiresVehicleHeader && (
+            {(showHourmeter || showMileage || requiresFuel || requiresWorkingHoursStart) && (
               <div className="grid gap-2 md:grid-cols-3">
-                <input
-                  className="input"
-                  type="number"
-                  placeholder="Horimetro"
-                  value={hourmeterValue}
-                  onChange={(event) => setHourmeterValue(event.target.value)}
-                />
-                <input
-                  className="input"
-                  type="number"
-                  placeholder="KM"
-                  value={mileageValue}
-                  onChange={(event) => setMileageValue(event.target.value)}
-                />
+                {showHourmeter && (
+                  <label className="space-y-1 text-sm font-medium text-slate-700">
+                    <span>Horimetro atual</span>
+                    <div className="flex items-center rounded-xl border border-slate-300 bg-white pr-3 focus-within:border-blue-500">
+                      <input
+                        className="min-w-0 flex-1 rounded-xl border-0 px-3 py-2 outline-none"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        placeholder="0,00"
+                        value={hourmeterValue}
+                        onChange={(event) => setHourmeterValue(event.target.value)}
+                        required
+                      />
+                      <span className="text-slate-500">h</span>
+                    </div>
+                    {selectedEquipment?.hourmeter != null && (
+                      <span className="block text-xs font-normal text-slate-500">
+                        Ultima leitura conhecida: {Number(selectedEquipment.hourmeter).toLocaleString("pt-BR")} h
+                      </span>
+                    )}
+                  </label>
+                )}
+                {showMileage && (
+                  <label className="space-y-1 text-sm font-medium text-slate-700">
+                    <span>Quilometragem atual</span>
+                    <div className="flex items-center rounded-xl border border-slate-300 bg-white pr-3 focus-within:border-blue-500">
+                      <input
+                        className="min-w-0 flex-1 rounded-xl border-0 px-3 py-2 outline-none"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        placeholder="0,00"
+                        value={mileageValue}
+                        onChange={(event) => setMileageValue(event.target.value)}
+                        required
+                      />
+                      <span className="text-slate-500">km</span>
+                    </div>
+                    {selectedEquipment?.mileage != null && (
+                      <span className="block text-xs font-normal text-slate-500">
+                        Ultima leitura conhecida: {Number(selectedEquipment.mileage).toLocaleString("pt-BR")} km
+                      </span>
+                    )}
+                  </label>
+                )}
                 {requiresFuel && (
                   <input
                     className="input"
@@ -355,6 +416,13 @@ export function ExecucaoChecklistPage() {
             <button className="btn-primary w-full py-3 text-base" disabled={createExecution.isPending}>
               {createExecution.isPending ? "Enviando checklist..." : "Finalizar checklist e registrar operacao"}
             </button>
+            {validationErrors.length > 0 && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+                {validationErrors.map((error) => (
+                  <p key={error}>{error}</p>
+                ))}
+              </div>
+            )}
             {actionMessage && <p className="text-sm text-emerald-700">{actionMessage}</p>}
             {createExecution.isError && (
               <p className="text-sm text-red-700">{(createExecution.error as Error).message}</p>

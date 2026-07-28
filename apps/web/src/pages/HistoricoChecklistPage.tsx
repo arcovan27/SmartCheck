@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, getUploadedFileUrl } from "../lib/api";
 import { formatBrazilDateTime } from "../lib/datetime";
+import { formatChecklistReadings } from "../lib/checklistReadings";
 
 function escapeHtml(value: string) {
   return value
@@ -74,6 +75,7 @@ export function HistoricoChecklistPage() {
           <tr>
             <td>${escapeHtml(execution.template?.name ?? "-")}</td>
             <td>${escapeHtml(formatBrazilDateTime(execution.executedAt))}</td>
+            <td>${formatChecklistReadings(execution).map(escapeHtml).join("<br/>") || "-"}</td>
             <td>${execution.hadProblem ? "Com falha" : "Sem falha"}</td>
             <td>${execution.hadProblem ? execution.items?.length ?? 0 : 0}</td>
           </tr>
@@ -144,11 +146,12 @@ export function HistoricoChecklistPage() {
               <tr>
                 <th>Checklist</th>
                 <th>Data/hora</th>
+                <th>Leituras</th>
                 <th>Status</th>
                 <th>Falhas</th>
               </tr>
             </thead>
-            <tbody>${checklistRows || '<tr><td colspan="4">Sem registros no periodo.</td></tr>'}</tbody>
+            <tbody>${checklistRows || '<tr><td colspan="5">Sem registros no periodo.</td></tr>'}</tbody>
           </table>
 
           <h2 style="margin-top: 16px;">Detalhes das falhas</h2>
@@ -241,6 +244,11 @@ export function HistoricoChecklistPage() {
                   <div key={execution.id} className="rounded-lg border border-slate-200 p-2 text-sm">
                     <p className="font-semibold">{execution.template.name}</p>
                     <p className="text-slate-600">{formatBrazilDateTime(execution.executedAt)}</p>
+                    {formatChecklistReadings(execution).map((reading) => (
+                      <p key={reading} className="font-medium text-slate-700">
+                        {reading}
+                      </p>
+                    ))}
                     <p className={execution.hadProblem ? "text-red-700" : "text-emerald-700"}>
                       {execution.hadProblem ? "Com falha" : "Sem falha"}
                     </p>
