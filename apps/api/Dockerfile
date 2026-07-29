@@ -12,4 +12,4 @@ RUN npm run prisma:generate
 RUN chmod +x /app/apps/api/docker-entrypoint.sh
 
 EXPOSE 3333
-CMD ["/app/apps/api/docker-entrypoint.sh"]
+CMD ["sh", "/app/apps/api/docker-entrypoint.sh"]
