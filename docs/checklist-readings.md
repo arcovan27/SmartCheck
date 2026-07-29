@@ -38,7 +38,7 @@ O valor padrao de modelos e execucoes antigas e `NONE`. Os campos de leitura con
 
 ## Implantacao e rollback
 
-A migration `20260728160000_add_checklist_reading_mode` e aditiva. Ela nao deve ser executada automaticamente por `prisma db push` em producao.
+A migration `20260728160000_add_checklist_reading_mode` e aditiva. O entrypoint usa `prisma migrate deploy`; `prisma db push` nao deve ser usado em producao.
 
 Antes da implantacao, deve-se criar backup consistente e testar restauracao. Como o banco existente antecede o Prisma Migrate, a baseline `20260728150000_baseline` deve ser revisada contra o schema real e marcada como aplicada com `prisma migrate resolve --applied 20260728150000_baseline`. Somente depois `prisma migrate deploy` podera aplicar `20260728160000_add_checklist_reading_mode`.
 
