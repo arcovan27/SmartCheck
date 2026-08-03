@@ -7,6 +7,7 @@ import { roleLabels } from "../lib/constants";
 
 const dashboardMenu = [
   { to: "/", label: "Dashboard" },
+  { to: "/orcamentos", label: "Orçamentos", permission: "QUOTE_VIEW" },
   { to: "/execucao-checklist", label: "Execucao de Checklist" },
   { to: "/historico-checklist", label: "Historico de Checklist" },
   { to: "/downloads", label: "Downloads" }
@@ -44,7 +45,7 @@ export function AppLayout() {
         { to: "/execucao-checklist", label: "Execucao de Checklist" },
         { to: "/historico-checklist", label: "Historico de Checklist" }
       ]
-    : dashboardMenu;
+    : dashboardMenu.filter((item) => !("permission" in item) || !item.permission || userHasPermission(user, item.permission));
   const visibleCadastroMenu =
     (user?.role === "ADMIN" ? cadastroMenu : cadastroMenu.filter((item) => item.to !== "/checklists"))
       .filter((item) => !("permission" in item) || !item.permission || userHasPermission(user, item.permission));

@@ -24,6 +24,7 @@ import { HrSchedulePage } from "./pages/hr/HrSchedulePage";
 import { HrOccurrenceIndicatorsPage } from "./pages/hr/HrOccurrenceIndicatorsPage";
 import { hrFeatures } from "./config/hrFeatures";
 import { HrWorkScheduleUnavailablePage } from "./pages/hr/HrModuleUnavailablePage";
+import { QuotesPage } from "./pages/QuotesPage";
 
 export default function App() {
   return (
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="equipamentos" element={<EquipmentsPage />} />
             <Route path="checklists" element={<ChecklistsPage />} />
             <Route path="manutencao" element={<MaintenancePage />} />
+            <Route path="orcamentos" element={<PermissionRoute permission="QUOTE_VIEW"><QuotesPage /></PermissionRoute>} />
             <Route path="recursos-humanos" element={<PermissionRoute permission="HR_DASHBOARD_VIEW"><HrDashboardPrototypePage /></PermissionRoute>} />
             <Route path="recursos-humanos/indicadores-ocorrencias" element={<PermissionRoute permission="OCCURRENCE_VIEW"><HrOccurrenceIndicatorsPage /></PermissionRoute>} />
             <Route path="recursos-humanos/epi" element={<PermissionRoute permission="EPI_VIEW"><HrEpiPrototypePage /></PermissionRoute>} />

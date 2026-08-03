@@ -173,6 +173,28 @@ enum HrPermission {
   DEPARTMENT_DEACTIVATE
   DEPARTMENT_DELETE
   AUDIT_VIEW
+  QUOTE_VIEW
+  QUOTE_CREATE
+  QUOTE_EDIT
+  QUOTE_ISSUE
+  QUOTE_DECIDE
+  QUOTE_CANCEL
+  QUOTE_DOCUMENT
+  QUOTE_VALUE_VIEW
+}
+
+enum QuoteStatus {
+  RASCUNHO
+  EMITIDO
+  APROVADO
+  REJEITADO
+  VENCIDO
+  CANCELADO
+}
+
+enum CatalogItemType {
+  PRODUTO
+  SERVICO
 }
 
 enum OccurrenceStatus {
@@ -437,6 +459,10 @@ model User {
   employeesInactivated       Employee[]              @relation("EmployeeInactivatedBy")
   employeeStatusChanges      EmployeeStatusHistory[] @relation("EmployeeStatusChangedBy")
   auditLogs                  AuditLog[]
+  quotesCreated              Quote[]                 @relation("QuoteCreatedBy")
+  quotesUpdated              Quote[]                 @relation("QuoteUpdatedBy")
+  quotesCommercialOwner      Quote[]                 @relation("QuoteCommercialOwner")
+  quoteHistory               QuoteHistory[]
 
   epiDeliveriesAsResponsible EpiDelivery[] @relation("EpiDeliveryResponsible")
 
@@ -746,6 +772,11 @@ model Company {
   holidays              Holiday[]
   scheduleImports       ScheduleImportBatch[]
   employeeStatusHistory EmployeeStatusHistory[]
+  customers             Customer[]
+  catalogItems          CatalogItem[]
+  quotes                Quote[]
+  quoteSequences        QuoteSequence[]
+  quoteHistory          QuoteHistory[]
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
 }
@@ -771,6 +802,8 @@ model Unit {
   holidays              Holiday[]
   scheduleImports       ScheduleImportBatch[]
   employeeStatusHistory EmployeeStatusHistory[]
+  quotes                Quote[]
+  quoteHistory          QuoteHistory[]
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
 
@@ -1216,4 +1249,150 @@ model AuditLog {
   @@index([companyId, createdAt])
   @@index([entityType, entityId, createdAt])
   @@index([actorUserId, createdAt])
+}
+
+model Customer {
+  id                 String   @id @default(cuid())
+  companyId          String
+  company            Company  @relation(fields: [companyId], references: [id])
+  legalName          String
+  tradeName          String?
+  document           String?
+  addressLine        String?
+  city               String?
+  state              String?
+  zipCode            String?
+  phone              String?
+  email              String?
+  responsibleContact String?
+  isActive           Boolean  @default(true)
+  quotes             Quote[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([companyId, document])
+  @@index([companyId, legalName, isActive])
+}
+
+model CatalogItem {
+  id          String          @id @default(cuid())
+  companyId   String
+  company     Company         @relation(fields: [companyId], references: [id])
+  type        CatalogItemType @default(PRODUTO)
+  code        String
+  description String
+  unit        String
+  unitPrice   Decimal         @db.Decimal(18, 4)
+  isActive    Boolean         @default(true)
+  quoteItems  QuoteItem[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([companyId, code])
+  @@index([companyId, description, isActive])
+}
+
+model QuoteSequence {
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  year      Int
+  lastValue Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([companyId, year])
+}
+
+model Quote {
+  id                String         @id @default(cuid())
+  companyId         String
+  company           Company        @relation(fields: [companyId], references: [id])
+  unitId            String?
+  unit              Unit?          @relation(fields: [unitId], references: [id])
+  customerId        String?
+  customer          Customer?      @relation(fields: [customerId], references: [id])
+  number            String
+  sequenceNumber    Int
+  sequenceYear      Int
+  issueDate         DateTime       @db.Date
+  validityDate      DateTime       @db.Date
+  paymentTerms      String?
+  deliveryForecast  String?
+  commercialNotes   String?
+  notes             String?
+  subtotal          Decimal        @default(0) @db.Decimal(18, 2)
+  discountTotal     Decimal        @default(0) @db.Decimal(18, 2)
+  surchargeTotal    Decimal        @default(0) @db.Decimal(18, 2)
+  total             Decimal        @default(0) @db.Decimal(18, 2)
+  status            QuoteStatus    @default(RASCUNHO)
+  currentVersion    Int            @default(0)
+  commercialOwnerId String?
+  commercialOwner   User?          @relation("QuoteCommercialOwner", fields: [commercialOwnerId], references: [id])
+  createdById       String
+  createdBy         User           @relation("QuoteCreatedBy", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?          @relation("QuoteUpdatedBy", fields: [updatedById], references: [id])
+  idempotencyKey    String?
+  deletedAt         DateTime?
+  items             QuoteItem[]
+  versions          QuoteVersion[]
+  history           QuoteHistory[]
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@unique([companyId, number])
+  @@unique([companyId, idempotencyKey])
+  @@unique([companyId, sequenceYear, sequenceNumber])
+  @@index([companyId, unitId, status, issueDate])
+  @@index([companyId, customerId, deletedAt])
+}
+
+model QuoteItem {
+  id            String       @id @default(cuid())
+  quoteId       String
+  quote         Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  catalogItemId String?
+  catalogItem   CatalogItem? @relation(fields: [catalogItemId], references: [id])
+  position      Int
+  code          String
+  description   String
+  unit          String
+  quantity      Decimal      @db.Decimal(18, 4)
+  unitPrice     Decimal      @db.Decimal(18, 4)
+  discount      Decimal      @default(0) @db.Decimal(18, 2)
+  total         Decimal      @db.Decimal(18, 2)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([quoteId, position])
+  @@index([catalogItemId])
+}
+
+model QuoteVersion {
+  id        String   @id @default(cuid())
+  quoteId   String
+  quote     Quote    @relation(fields: [quoteId], references: [id])
+  version   Int
+  snapshot  Json
+  createdAt DateTime @default(now())
+
+  @@unique([quoteId, version])
+}
+
+model QuoteHistory {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id])
+  unitId        String?
+  unit          Unit?    @relation(fields: [unitId], references: [id])
+  quoteId       String
+  quote         Quote    @relation(fields: [quoteId], references: [id])
+  actorUserId   String
+  actorUser     User     @relation(fields: [actorUserId], references: [id])
+  action        String
+  previousValue Json?
+  newValue      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([quoteId, createdAt])
+  @@index([companyId, unitId, createdAt])
 }
