@@ -39,7 +39,7 @@ test("reativacao e concorrente segura e nao restaura escalas silenciosamente", (
 });
 
 test("indicadores usam uma regra de periodo, status e setor historico", () => {
-  assert.match(occurrences, /inclusiveDateRange/);
+  assert.match(occurrences, /inclusiveStoredCivilDateRange/);
   assert.match(occurrences, /OccurrenceStatus\.PENDENTE/);
   assert.match(occurrences, /OccurrenceStatus\.EM_ANALISE/);
   assert.match(occurrences, /OccurrenceStatus\.APROVADO/);

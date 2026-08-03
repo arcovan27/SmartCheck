@@ -5,7 +5,7 @@ import { prisma } from "../prisma.js";
 import { assertCompanyAccess, hasHrPermission, requireHrPermission, resolveHrDataScope, unitScopeFilter } from "../services/hrAccess.js";
 import { calculateCostVariation } from "../services/epiCosts.js";
 import { env } from "../env.js";
-import { inclusiveDateRange } from "../services/hrSafety.js";
+import { inclusiveDateRange, inclusiveStoredCivilDateRange } from "../services/hrSafety.js";
 
 function toNumber(value: unknown): number {
   if (value === null || value === undefined) return 0;
@@ -67,6 +67,7 @@ export async function hrDashboardRoutes(app: FastifyInstance) {
         return reply.code(400).send({ message: error instanceof Error ? error.message : "Periodo invalido" });
       }
       const { start, endExclusive, endInclusive } = range;
+      const occurrenceRange = inclusiveStoredCivilDateRange(query.startDate, query.endDate, env.APP_TIMEZONE);
       const scope = await resolveHrDataScope(request);
       if (scope.companyIds.length === 0) return reply.code(403).send({ message: "Usuario sem empresa autorizada" });
       if (query.companyId) assertCompanyAccess(scope, query.companyId);
@@ -93,9 +94,9 @@ export async function hrDashboardRoutes(app: FastifyInstance) {
         AND: [
           {
             OR: [
-              { startDate: { gte: start, lt: endExclusive } },
-              { startDate: { lt: start }, endDate: { gte: start } },
-              { startDate: null, date: { gte: start, lt: endExclusive } }
+              { startDate: { gte: occurrenceRange.start, lt: occurrenceRange.endExclusive } },
+              { startDate: { lt: occurrenceRange.start }, endDate: { gte: occurrenceRange.start } },
+              { startDate: null, date: { gte: occurrenceRange.start, lt: occurrenceRange.endExclusive } }
             ]
           },
           ...(query.departmentId ? [{

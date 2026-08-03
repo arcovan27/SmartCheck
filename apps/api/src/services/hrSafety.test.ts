@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EmployeeOccurrenceType, OccurrenceStatus } from "@prisma/client";
-import { departmentDeletionBlockers, inclusiveDateRange, occurrenceCountsInIndicators, occurrenceIndicatorBucket } from "./hrSafety.js";
+import { departmentDeletionBlockers, inclusiveDateRange, inclusiveStoredCivilDateRange, occurrenceCountsInIndicators, occurrenceIndicatorBucket } from "./hrSafety.js";
 
 test("periodo civil e inclusivo no fuso de Sao Paulo", () => {
   const range = inclusiveDateRange("2026-07-01", "2026-07-31", "America/Sao_Paulo");
@@ -13,6 +13,13 @@ test("periodo civil e inclusivo no fuso de Sao Paulo", () => {
 test("periodo rejeita ordem invertida e intervalo excessivo", () => {
   assert.throws(() => inclusiveDateRange("2026-08-01", "2026-07-01"), /Periodo invalido/);
   assert.throws(() => inclusiveDateRange("2020-01-01", "2026-01-01"), /maximo dois anos/);
+});
+
+test("periodo de campo civil usa meia-noite UTC sem incluir o dia seguinte", () => {
+  const range = inclusiveStoredCivilDateRange("2026-08-03", "2026-08-03", "America/Sao_Paulo");
+  assert.equal(range.start.toISOString(), "2026-08-03T00:00:00.000Z");
+  assert.equal(range.endExclusive.toISOString(), "2026-08-04T00:00:00.000Z");
+  assert.equal(new Date("2026-08-04T00:00:00.000Z") < range.endExclusive, false);
 });
 
 test("ocorrencias rejeitadas, canceladas ou excluidas nao entram nos indicadores", () => {

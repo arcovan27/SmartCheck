@@ -5,7 +5,7 @@ import { prisma } from "../prisma.js";
 import { writeAudit } from "../services/audit.js";
 import { assertUnitAccess, hasHrPermission, requireAnyHrPermission, requireHrPermission, resolveHrDataScope, unitScopeFilter } from "../services/hrAccess.js";
 import { env } from "../env.js";
-import { inclusiveDateRange } from "../services/hrSafety.js";
+import { inclusiveStoredCivilDateRange } from "../services/hrSafety.js";
 import { calendarDayCount, legacyOccurrenceType, occurrenceFrequencyCodes, occurrenceImpactRange, occurrenceTypePermission, validateOccurrenceBusinessRules } from "../services/occurrenceWorkflow.js";
 import { dateKey, dateOnly, startOfCompetence } from "../services/workforceSchedules.js";
 
@@ -226,9 +226,9 @@ export async function hrOccurrenceRoutes(app: FastifyInstance) {
         bucket: z.enum(["JUSTIFIED_ABSENCE", "UNJUSTIFIED_ABSENCE", "MEDICAL_CERTIFICATE", "LEAVE", "VACATION", "WARNING", "SUSPENSION", "WORK_ACCIDENT", "LICENSE", "OTHER"]).optional(),
         status: z.nativeEnum(OccurrenceStatus).optional()
       }).parse(request.query);
-      let range: ReturnType<typeof inclusiveDateRange>;
+      let range: ReturnType<typeof inclusiveStoredCivilDateRange>;
       try {
-        range = inclusiveDateRange(query.startDate, query.endDate, env.APP_TIMEZONE);
+        range = inclusiveStoredCivilDateRange(query.startDate, query.endDate, env.APP_TIMEZONE);
       } catch (error) {
         return reply.code(400).send({ message: error instanceof Error ? error.message : "Periodo invalido" });
       }

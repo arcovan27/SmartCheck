@@ -44,6 +44,13 @@ export function inclusiveDateRange(startDate: string, endDate: string, timeZone 
   return { start, endExclusive, endInclusive: new Date(endExclusive.getTime() - 1), startDate, endDate, timeZone };
 }
 
+export function inclusiveStoredCivilDateRange(startDate: string, endDate: string, timeZone = "America/Sao_Paulo") {
+  inclusiveDateRange(startDate, endDate, timeZone);
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  const endExclusive = new Date(`${addCalendarDays(endDate, 1)}T00:00:00.000Z`);
+  return { start, endExclusive, endInclusive: new Date(endExclusive.getTime() - 1), startDate, endDate, timeZone };
+}
+
 export function occurrenceCountsInIndicators(status: OccurrenceStatus, deletedAt?: Date | null): boolean {
   return !deletedAt && status !== OccurrenceStatus.REJEITADO && status !== OccurrenceStatus.CANCELADO;
 }
