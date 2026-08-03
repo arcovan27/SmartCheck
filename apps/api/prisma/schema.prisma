@@ -72,6 +72,7 @@ enum ChecklistOptionResult {
 enum EpiMovementType {
   ENTREGA
   DEVOLUCAO
+  SUBSTITUICAO
 }
 
 enum ConfirmationMethod {
@@ -112,60 +113,330 @@ enum MaintenancePlanAlertState {
 enum EmployeeOccurrenceType {
   ATESTADO_MEDICO
   FALTA
+  AFASTAMENTO
+  FERIAS
   ADVERTENCIA
+  SUSPENSAO
+  ACIDENTE_TRABALHO
   OUTRO
 }
 
+enum EmployeeInactivationReason {
+  TERMINATED_BY_COMPANY
+  VOLUNTARY_RESIGNATION
+}
+
+enum EmployeeLifecycleStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum HrPermission {
+  HR_ACCESS
+  HR_DASHBOARD_VIEW
+  EPI_VIEW
+  EPI_COST_VIEW
+  EPI_MANAGE
+  EMPLOYEE_VIEW
+  EMPLOYEE_MANAGE
+  SCHEDULE_VIEW
+  SCHEDULE_MANAGE
+  SCHEDULE_CREATE
+  SCHEDULE_EDIT
+  SCHEDULE_BULK_EDIT
+  FREQUENCY_REGISTER
+  CERTIFICATE_REGISTER
+  CERTIFICATE_APPROVE
+  SCHEDULE_PERIOD_CLOSE
+  SCHEDULE_PERIOD_REOPEN
+  SCHEDULE_IMPORT
+  SCHEDULE_EXPORT
+  SHIFT_MANAGE
+  FREQUENCY_TYPE_MANAGE
+  OCCURRENCE_REGISTER
+  OCCURRENCE_REVIEW
+  OCCURRENCE_VIEW
+  OCCURRENCE_EDIT
+  OCCURRENCE_CANCEL
+  WARNING_VIEW
+  WARNING_REGISTER
+  SUSPENSION_VIEW
+  SUSPENSION_REGISTER
+  WORK_ACCIDENT_VIEW
+  WORK_ACCIDENT_REGISTER
+  DOCUMENT_VIEW
+  REPORT_EXPORT
+  CATALOG_MANAGE
+  DEPARTMENT_VIEW
+  DEPARTMENT_CREATE
+  DEPARTMENT_EDIT
+  DEPARTMENT_DEACTIVATE
+  DEPARTMENT_DELETE
+  AUDIT_VIEW
+}
+
+enum OccurrenceStatus {
+  PENDENTE
+  EM_ANALISE
+  APROVADO
+  REJEITADO
+  CANCELADO
+}
+
+enum EpiCostSource {
+  PRECO_CADASTRO
+  CUSTO_ESTOQUE
+  INFORMADO_MANUALMENTE
+  ESTIMADO_LEGADO
+}
+
+enum WorkScheduleStatus {
+  ATIVA
+  INATIVA
+  CANCELADA
+}
+
+enum ScheduleDayType {
+  WORK
+  DSR
+  DAY_OFF
+  HOLIDAY
+}
+
+enum ScheduleOrigin {
+  LEGACY
+  PATTERN
+  MANUAL
+  COPY
+  IMPORT
+  EXCEPTION
+}
+
+enum SchedulePatternType {
+  WEEKLY
+  CYCLE
+  CUSTOM
+  FLEXIBLE
+}
+
+enum ScheduleAssignmentStatus {
+  ACTIVE
+  INACTIVE
+  CANCELLED
+}
+
+enum FrequencyCategory {
+  PRESENCE
+  REST
+  JUSTIFIED_ABSENCE
+  UNJUSTIFIED_ABSENCE
+  LEAVE
+  CALENDAR
+  DISCIPLINARY
+}
+
+enum SchedulePeriodStatus {
+  OPEN
+  REVIEW
+  CLOSED
+  REOPENED
+}
+
+enum HolidayScope {
+  NATIONAL
+  STATE
+  CITY
+  COMPANY
+  UNIT
+}
+
+enum ScheduleImportStatus {
+  VALIDATING
+  REVIEW_REQUIRED
+  READY
+  IMPORTED
+  FAILED
+  CANCELLED
+}
+
+enum ScheduleImportItemStatus {
+  READY
+  EMPLOYEE_NOT_FOUND
+  EMPLOYEE_SUGGESTED
+  EMPLOYEE_AMBIGUOUS
+  EMPLOYEE_INACTIVE
+  CODE_NOT_FOUND
+  CODE_AMBIGUOUS
+  CONFLICT
+  IGNORED
+  IMPORTED
+}
+
 model Employee {
-  id           String             @id @default(cuid())
-  name         String
-  registration String             @unique
-  cpf          String?            @unique
-  department   String
-  position     String
-  phone        String?
-  email        String?
-  photoPath    String?
-  admissionDate DateTime?
-  dismissalDate DateTime?
-  isActive     Boolean            @default(true)
-  notes        String?
-  user         User?
-  biometric    EmployeeBiometric?
-  occurrences  EmployeeOccurrence[]
+  id                    String                      @id @default(cuid())
+  name                  String
+  registration          String                      @unique
+  cpf                   String?                     @unique
+  department            String
+  position              String
+  phone                 String?
+  email                 String?
+  photoPath             String?
+  admissionDate         DateTime?
+  dismissalDate         DateTime?
+  isActive              Boolean                     @default(true)
+  inactiveEffectiveDate DateTime?                   @db.Date
+  inactiveReason        EmployeeInactivationReason?
+  inactiveNotes         String?
+  inactivatedById       String?
+  inactivatedBy         User?                       @relation("EmployeeInactivatedBy", fields: [inactivatedById], references: [id])
+  notes                 String?
+  companyId             String?
+  company               Company?                    @relation(fields: [companyId], references: [id])
+  unitId                String?
+  unitRef               Unit?                       @relation(fields: [unitId], references: [id])
+  departmentId          String?
+  departmentRef         Department?                 @relation(fields: [departmentId], references: [id])
+  positionId            String?
+  positionRef           Position?                   @relation(fields: [positionId], references: [id])
+  costCenterId          String?
+  costCenter            CostCenter?                 @relation(fields: [costCenterId], references: [id])
+  teamId                String?
+  team                  Team?                       @relation(fields: [teamId], references: [id])
+  user                  User?
+  biometric             EmployeeBiometric?
+  occurrences           EmployeeOccurrence[]
+  scheduleAssignments   ScheduleAssignment[]
+  dailyAttendances      DailyAttendance[]
+  scheduleImportItems   ScheduleImportItem[]
+  statusHistory         EmployeeStatusHistory[]
 
   checklistExecutions ChecklistExecution[]
   maintenances        Maintenance[]
   epiMovements        EpiDelivery[]
+  workSchedules       WorkSchedule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([companyId, unitId, isActive])
+  @@index([companyId, departmentId])
+  @@index([admissionDate])
+  @@index([dismissalDate])
+  @@index([companyId, inactiveEffectiveDate])
 }
 
 model EmployeeOccurrence {
-  id          String                 @id @default(cuid())
-  employeeId  String
-  employee    Employee               @relation(fields: [employeeId], references: [id])
-  type        EmployeeOccurrenceType
-  date        DateTime               @default(now())
-  description String
-  daysAway    Int?
-  notes       String?
-  attachmentPath     String?
-  attachmentMimeType String?
-  attachmentFilename String?
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+  id                     String                 @id @default(cuid())
+  employeeId             String
+  employee               Employee               @relation(fields: [employeeId], references: [id])
+  type                   EmployeeOccurrenceType
+  date                   DateTime               @default(now())
+  description            String
+  daysAway               Int?
+  notes                  String?
+  attachmentPath         String?
+  attachmentMimeType     String?
+  attachmentFilename     String?
+  companyId              String?
+  company                Company?               @relation(fields: [companyId], references: [id])
+  unitId                 String?
+  unit                   Unit?                  @relation(fields: [unitId], references: [id])
+  departmentId           String?
+  department             Department?            @relation(fields: [departmentId], references: [id])
+  departmentNameSnapshot String?
+  teamId                 String?
+  team                   Team?                  @relation(fields: [teamId], references: [id])
+  frequencyTypeId        String?
+  frequencyType          FrequencyType?         @relation(fields: [frequencyTypeId], references: [id])
+  startDate              DateTime?
+  endDate                DateTime?
+  accidentOccurredAt     DateTime?
+  accidentLocation       String?
+  hasAccidentLeave       Boolean?
+  accidentLeaveStartDate DateTime?              @db.Date
+  accidentLeaveEndDate   DateTime?              @db.Date
+  catNumber              String?
+  hoursAway              Decimal?               @db.Decimal(8, 2)
+  isJustified            Boolean?
+  reasonId               String?
+  reason                 AbsenceReason?         @relation(fields: [reasonId], references: [id])
+  status                 OccurrenceStatus       @default(PENDENTE)
+  registeredById         String?
+  registeredBy           User?                  @relation("OccurrenceRegisteredBy", fields: [registeredById], references: [id])
+  reviewedById           String?
+  reviewedBy             User?                  @relation("OccurrenceReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt             DateTime?
+  deletedAt              DateTime?
+  idempotencyKey         String?
+  attachments            Attachment[]
+  dailyAttendances       DailyAttendance[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, unitId, startDate, status])
+  @@index([employeeId, startDate])
+  @@index([companyId, departmentId, startDate, status])
+  @@index([companyId, frequencyTypeId, startDate, status])
+  @@index([teamId, startDate])
+}
+
+model EmployeeStatusHistory {
+  id                      String                      @id @default(cuid())
+  companyId               String
+  company                 Company                     @relation(fields: [companyId], references: [id])
+  unitId                  String?
+  unit                    Unit?                       @relation(fields: [unitId], references: [id])
+  employeeId              String
+  employee                Employee                    @relation(fields: [employeeId], references: [id])
+  previousStatus          EmployeeLifecycleStatus
+  newStatus               EmployeeLifecycleStatus
+  reason                  EmployeeInactivationReason?
+  effectiveDate           DateTime                    @db.Date
+  notes                   String?
+  departmentId            String?
+  department              Department?                 @relation(fields: [departmentId], references: [id])
+  departmentNameSnapshot  String?
+  futureSchedulesAffected Int                         @default(0)
+  assignmentsAffected     Int                         @default(0)
+  changedById             String
+  changedBy               User                        @relation("EmployeeStatusChangedBy", fields: [changedById], references: [id])
+  createdAt               DateTime                    @default(now())
+
+  @@index([employeeId, effectiveDate, createdAt])
+  @@index([companyId, createdAt])
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String    @id @default(cuid())
+  email        String    @unique
   passwordHash String
   role         UserRole
-  isActive     Boolean  @default(true)
-  employeeId   String?  @unique
+  isActive     Boolean   @default(true)
+  employeeId   String?   @unique
   employee     Employee? @relation(fields: [employeeId], references: [id])
+
+  companyAccess              UserCompanyAccess[]
+  unitAccess                 UserUnitAccess[]
+  occurrencesRegistered      EmployeeOccurrence[]    @relation("OccurrenceRegisteredBy")
+  occurrencesReviewed        EmployeeOccurrence[]    @relation("OccurrenceReviewedBy")
+  schedulesCreated           WorkSchedule[]          @relation("ScheduleCreatedBy")
+  schedulesUpdated           WorkSchedule[]          @relation("ScheduleUpdatedBy")
+  scheduleAssignmentsCreated ScheduleAssignment[]    @relation("ScheduleAssignmentCreatedBy")
+  scheduleAssignmentsUpdated ScheduleAssignment[]    @relation("ScheduleAssignmentUpdatedBy")
+  dailyAttendancesCreated    DailyAttendance[]       @relation("DailyAttendanceCreatedBy")
+  dailyAttendancesUpdated    DailyAttendance[]       @relation("DailyAttendanceUpdatedBy")
+  dailyAttendancesApproved   DailyAttendance[]       @relation("DailyAttendanceApprovedBy")
+  schedulePeriodsClosed      SchedulePeriod[]        @relation("SchedulePeriodClosedBy")
+  schedulePeriodsReopened    SchedulePeriod[]        @relation("SchedulePeriodReopenedBy")
+  scheduleImportsCreated     ScheduleImportBatch[]   @relation("ScheduleImportCreatedBy")
+  attachmentsUploaded        Attachment[]            @relation("AttachmentUploadedBy")
+  attachmentsDeleted         Attachment[]            @relation("AttachmentDeletedBy")
+  departmentsDeleted         Department[]            @relation("DepartmentDeletedBy")
+  employeesInactivated       Employee[]              @relation("EmployeeInactivatedBy")
+  employeeStatusChanges      EmployeeStatusHistory[] @relation("EmployeeStatusChangedBy")
+  auditLogs                  AuditLog[]
 
   epiDeliveriesAsResponsible EpiDelivery[] @relation("EpiDeliveryResponsible")
 
@@ -174,19 +445,19 @@ model User {
 }
 
 model EmployeeBiometric {
-  id                   String           @id @default(cuid())
-  employeeId           String           @unique
-  employee             Employee         @relation(fields: [employeeId], references: [id])
-  biometricTemplateId  String?
-  biometricExternalId  String?
-  provider             BiometricProvider
-  status               BiometricStatus  @default(PENDENTE)
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  id                  String            @id @default(cuid())
+  employeeId          String            @unique
+  employee            Employee          @relation(fields: [employeeId], references: [id])
+  biometricTemplateId String?
+  biometricExternalId String?
+  provider            BiometricProvider
+  status              BiometricStatus   @default(PENDENTE)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 }
 
 model Epi {
-  id            String       @id @default(cuid())
+  id            String    @id @default(cuid())
   name          String
   description   String?
   ca            String
@@ -194,60 +465,80 @@ model Epi {
   validityDate  DateTime?
   unit          String
   purchasePrice Float?
-  stock         Int          @default(0)
-  minimumStock  Int          @default(0)
-  isActive      Boolean      @default(true)
+  stock         Int       @default(0)
+  minimumStock  Int       @default(0)
+  isActive      Boolean   @default(true)
+  companyId     String?
+  company       Company?  @relation(fields: [companyId], references: [id])
+  unitId        String?
+  unitRef       Unit?     @relation(fields: [unitId], references: [id])
 
-  movements     EpiDelivery[]
+  movements EpiDelivery[]
 
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([name, ca])
+  @@index([companyId, unitId, isActive])
 }
 
 model EpiDelivery {
-  id                          String              @id @default(cuid())
-  employeeId                  String
-  employee                    Employee            @relation(fields: [employeeId], references: [id])
-  epiId                       String
-  epi                         Epi                 @relation(fields: [epiId], references: [id])
-  movementType                EpiMovementType     @default(ENTREGA)
-  quantity                    Int
-  date                        DateTime            @default(now())
-  responsibleUserId           String?
-  responsibleUser             User?               @relation("EpiDeliveryResponsible", fields: [responsibleUserId], references: [id])
-  notes                       String?
-  confirmationMethod          ConfirmationMethod  @default(LOGIN)
-  confirmationBiometricId     String?
-  employeeSignatureName       String?
-  employeeConfirmedAt         DateTime?
+  id                      String             @id @default(cuid())
+  employeeId              String
+  employee                Employee           @relation(fields: [employeeId], references: [id])
+  epiId                   String
+  epi                     Epi                @relation(fields: [epiId], references: [id])
+  movementType            EpiMovementType    @default(ENTREGA)
+  quantity                Int
+  date                    DateTime           @default(now())
+  responsibleUserId       String?
+  responsibleUser         User?              @relation("EpiDeliveryResponsible", fields: [responsibleUserId], references: [id])
+  notes                   String?
+  confirmationMethod      ConfirmationMethod @default(LOGIN)
+  confirmationBiometricId String?
+  employeeSignatureName   String?
+  employeeConfirmedAt     DateTime?
+  companyId               String?
+  company                 Company?           @relation(fields: [companyId], references: [id])
+  unitId                  String?
+  unit                    Unit?              @relation(fields: [unitId], references: [id])
+  unitCostSnapshot        Decimal?           @db.Decimal(14, 4)
+  costSource              EpiCostSource?
+  isEstimatedCost         Boolean            @default(false)
+  departmentSnapshot      String?
+  positionSnapshot        String?
+  costCenterSnapshot      String?
+  movementReason          String?
 
-  attachments                 Attachment[]
+  attachments Attachment[]
 
-  createdAt                   DateTime            @default(now())
-  updatedAt                   DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, unitId, date])
+  @@index([employeeId, date])
+  @@index([epiId, date])
 }
 
 model Equipment {
-  id            String         @id @default(cuid())
-  name          String
-  type          EquipmentType
-  department    String
-  model         String?
-  serialNumber  String?
-  hourmeter     Float?
-  mileage       Float?
-  manufacturer  String?
-  assetTag      String?
-  notes         String?
-  isActive      Boolean        @default(true)
+  id           String        @id @default(cuid())
+  name         String
+  type         EquipmentType
+  department   String
+  model        String?
+  serialNumber String?
+  hourmeter    Float?
+  mileage      Float?
+  manufacturer String?
+  assetTag     String?
+  notes        String?
+  isActive     Boolean       @default(true)
 
-  checklistTemplateLinks ChecklistTemplateEquipment[]
-  checklistTemplatesLegacy ChecklistTemplate[] @relation("ChecklistTemplateLegacyEquipment")
-  checklistExecutions ChecklistExecution[]
-  maintenances       Maintenance[]
-  maintenancePlans   MaintenancePlan[]
+  checklistTemplateLinks   ChecklistTemplateEquipment[]
+  checklistTemplatesLegacy ChecklistTemplate[]          @relation("ChecklistTemplateLegacyEquipment")
+  checklistExecutions      ChecklistExecution[]
+  maintenances             Maintenance[]
+  maintenancePlans         MaintenancePlan[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -256,19 +547,19 @@ model Equipment {
 }
 
 model ChecklistTemplate {
-  id            String               @id @default(cuid())
-  code          ChecklistTemplateCode @default(OUTRO)
-  name          String
-  description   String?
-  periodicity   ChecklistPeriodicity
-  readingMode   ChecklistReadingMode   @default(NONE)
-  equipmentId   String?
-  equipment     Equipment?           @relation("ChecklistTemplateLegacyEquipment", fields: [equipmentId], references: [id])
-  isActive      Boolean              @default(true)
+  id          String                @id @default(cuid())
+  code        ChecklistTemplateCode @default(OUTRO)
+  name        String
+  description String?
+  periodicity ChecklistPeriodicity
+  readingMode ChecklistReadingMode  @default(NONE)
+  equipmentId String?
+  equipment   Equipment?            @relation("ChecklistTemplateLegacyEquipment", fields: [equipmentId], references: [id])
+  isActive    Boolean               @default(true)
 
   equipmentLinks ChecklistTemplateEquipment[]
-  items         ChecklistTemplateItem[]
-  executions    ChecklistExecution[]
+  items          ChecklistTemplateItem[]
+  executions     ChecklistExecution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -285,19 +576,19 @@ model ChecklistTemplateEquipment {
 }
 
 model ChecklistTemplateItem {
-  id                          String             @id @default(cuid())
-  templateId                  String
-  template                    ChecklistTemplate  @relation(fields: [templateId], references: [id])
-  label                       String
-  section                     String?
-  instruction                 String?
-  itemType                    ChecklistItemType
-  position                    Int
-  required                    Boolean            @default(true)
+  id                           String            @id @default(cuid())
+  templateId                   String
+  template                     ChecklistTemplate @relation(fields: [templateId], references: [id])
+  label                        String
+  section                      String?
+  instruction                  String?
+  itemType                     ChecklistItemType
+  position                     Int
+  required                     Boolean           @default(true)
   requiresObservationOnProblem Boolean           @default(true)
-  allowsPhotoOnProblem        Boolean            @default(true)
-  requiresPhotoOnProblem      Boolean            @default(false)
-  opensMaintenanceOnProblem   Boolean            @default(true)
+  allowsPhotoOnProblem         Boolean           @default(true)
+  requiresPhotoOnProblem       Boolean           @default(false)
+  opensMaintenanceOnProblem    Boolean           @default(true)
 
   executionItems ChecklistExecutionItem[]
 
@@ -306,26 +597,27 @@ model ChecklistTemplateItem {
 }
 
 model ChecklistExecution {
-  id          String             @id @default(cuid())
-  templateId  String
-  template    ChecklistTemplate  @relation(fields: [templateId], references: [id])
-  equipmentId String
-  equipment   Equipment          @relation(fields: [equipmentId], references: [id])
-  employeeId  String
-  employee    Employee           @relation(fields: [employeeId], references: [id])
-  executedAt  DateTime           @default(now())
-  readingMode ChecklistReadingMode @default(NONE)
-  monthReference String?
-  operatorName String?
-  secondaryOperatorName String?
-  hourmeterValue Float?
-  mileageValue Float?
+  id                     String               @id @default(cuid())
+  templateId             String
+  template               ChecklistTemplate    @relation(fields: [templateId], references: [id])
+  equipmentId            String
+  equipment              Equipment            @relation(fields: [equipmentId], references: [id])
+  employeeId             String
+  employee               Employee             @relation(fields: [employeeId], references: [id])
+  departmentNameSnapshot String?
+  executedAt             DateTime             @default(now())
+  readingMode            ChecklistReadingMode @default(NONE)
+  monthReference         String?
+  operatorName           String?
+  secondaryOperatorName  String?
+  hourmeterValue         Float?
+  mileageValue           Float?
   workingHoursStartMonth Float?
-  fuelLevel String?
-  notes       String?
-  hadProblem  Boolean            @default(false)
+  fuelLevel              String?
+  notes                  String?
+  hadProblem             Boolean              @default(false)
 
-  items       ChecklistExecutionItem[]
+  items        ChecklistExecutionItem[]
   maintenances Maintenance[]
 
   createdAt DateTime @default(now())
@@ -333,52 +625,52 @@ model ChecklistExecution {
 }
 
 model ChecklistExecutionItem {
-  id               String                 @id @default(cuid())
-  executionId      String
-  execution        ChecklistExecution     @relation(fields: [executionId], references: [id])
-  templateItemId   String
-  templateItem     ChecklistTemplateItem  @relation(fields: [templateItemId], references: [id])
+  id             String                @id @default(cuid())
+  executionId    String
+  execution      ChecklistExecution    @relation(fields: [executionId], references: [id])
+  templateItemId String
+  templateItem   ChecklistTemplateItem @relation(fields: [templateItemId], references: [id])
 
-  optionResult     ChecklistOptionResult?
-  booleanResult    Boolean?
-  numericValue     Float?
-  textValue        String?
-  observation      String?
-  hadProblem       Boolean                @default(false)
+  optionResult  ChecklistOptionResult?
+  booleanResult Boolean?
+  numericValue  Float?
+  textValue     String?
+  observation   String?
+  hadProblem    Boolean                @default(false)
 
-  attachments      Attachment[]
+  attachments Attachment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Maintenance {
-  id                    String              @id @default(cuid())
-  equipmentId           String
-  equipment             Equipment           @relation(fields: [equipmentId], references: [id])
-  checklistExecutionId  String?
-  checklistExecution    ChecklistExecution? @relation(fields: [checklistExecutionId], references: [id])
-  type                  MaintenanceType
-  priority              MaintenancePriority @default(MEDIA)
-  status                MaintenanceStatus   @default(ABERTA)
-  description           String
-  cause                 String?
-  responsibleId         String?
-  responsible           Employee?           @relation(fields: [responsibleId], references: [id])
-  openedAt              DateTime            @default(now())
-  concludedAt           DateTime?
-  notes                 String?
+  id                   String              @id @default(cuid())
+  equipmentId          String
+  equipment            Equipment           @relation(fields: [equipmentId], references: [id])
+  checklistExecutionId String?
+  checklistExecution   ChecklistExecution? @relation(fields: [checklistExecutionId], references: [id])
+  type                 MaintenanceType
+  priority             MaintenancePriority @default(MEDIA)
+  status               MaintenanceStatus   @default(ABERTA)
+  description          String
+  cause                String?
+  responsibleId        String?
+  responsible          Employee?           @relation(fields: [responsibleId], references: [id])
+  openedAt             DateTime            @default(now())
+  concludedAt          DateTime?
+  notes                String?
 
-  attachments           Attachment[]
+  attachments Attachment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model MaintenancePlan {
-  id                 String                    @id @default(cuid())
+  id                 String                     @id @default(cuid())
   equipmentId        String
-  equipment          Equipment                 @relation(fields: [equipmentId], references: [id])
+  equipment          Equipment                  @relation(fields: [equipmentId], references: [id])
   title              String
   description        String?
   triggerType        MaintenancePlanTriggerType
@@ -386,38 +678,542 @@ model MaintenancePlan {
   nearThreshold      Float?
   lastExecutionDate  DateTime?
   lastExecutionValue Float?
-  isActive           Boolean                   @default(true)
+  isActive           Boolean                    @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Attachment {
-  id                        String                 @id @default(cuid())
-  filename                  String
-  mimeType                  String
-  path                      String
-  maintenanceId             String?
-  maintenance               Maintenance?           @relation(fields: [maintenanceId], references: [id])
-  checklistExecutionItemId  String?
-  checklistExecutionItem    ChecklistExecutionItem? @relation(fields: [checklistExecutionItemId], references: [id])
-  epiDeliveryId             String?
-  epiDelivery               EpiDelivery?           @relation(fields: [epiDeliveryId], references: [id])
+  id                       String                  @id @default(cuid())
+  filename                 String
+  mimeType                 String
+  path                     String
+  maintenanceId            String?
+  maintenance              Maintenance?            @relation(fields: [maintenanceId], references: [id])
+  checklistExecutionItemId String?
+  checklistExecutionItem   ChecklistExecutionItem? @relation(fields: [checklistExecutionItemId], references: [id])
+  epiDeliveryId            String?
+  epiDelivery              EpiDelivery?            @relation(fields: [epiDeliveryId], references: [id])
+  employeeOccurrenceId     String?
+  employeeOccurrence       EmployeeOccurrence?     @relation(fields: [employeeOccurrenceId], references: [id])
+  companyId                String?
+  company                  Company?                @relation(fields: [companyId], references: [id])
+  uploadedById             String?
+  uploadedBy               User?                   @relation("AttachmentUploadedBy", fields: [uploadedById], references: [id])
+  isSensitive              Boolean                 @default(false)
+  deletedAt                DateTime?
+  deletedById              String?
+  deletedBy                User?                   @relation("AttachmentDeletedBy", fields: [deletedById], references: [id])
 
   createdAt DateTime @default(now())
+
+  @@index([employeeOccurrenceId, deletedAt])
+  @@index([companyId, isSensitive])
 }
 
 model Company {
-  id           String   @id @default(cuid())
-  legalName    String
-  tradeName    String?
-  cnpj         String   @unique
-  email        String?
-  phone        String?
-  addressLine  String?
-  city         String?
-  state        String?
-  zipCode      String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                    String                  @id @default(cuid())
+  legalName             String
+  tradeName             String?
+  cnpj                  String                  @unique
+  email                 String?
+  phone                 String?
+  addressLine           String?
+  city                  String?
+  state                 String?
+  zipCode               String?
+  units                 Unit[]
+  departments           Department[]
+  positions             Position[]
+  costCenters           CostCenter[]
+  teams                 Team[]
+  shifts                WorkShift[]
+  employees             Employee[]
+  epis                  Epi[]
+  epiDeliveries         EpiDelivery[]
+  occurrences           EmployeeOccurrence[]
+  absenceReasons        AbsenceReason[]
+  schedules             WorkSchedule[]
+  userAccess            UserCompanyAccess[]
+  attachments           Attachment[]
+  auditLogs             AuditLog[]
+  schedulePatterns      SchedulePattern[]
+  scheduleAssignments   ScheduleAssignment[]
+  frequencyTypes        FrequencyType[]
+  dailyAttendances      DailyAttendance[]
+  schedulePeriods       SchedulePeriod[]
+  holidays              Holiday[]
+  scheduleImports       ScheduleImportBatch[]
+  employeeStatusHistory EmployeeStatusHistory[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+}
+
+model Unit {
+  id                    String                  @id @default(cuid())
+  companyId             String
+  company               Company                 @relation(fields: [companyId], references: [id])
+  name                  String
+  code                  String?
+  isActive              Boolean                 @default(true)
+  employees             Employee[]
+  epis                  Epi[]
+  epiDeliveries         EpiDelivery[]
+  occurrences           EmployeeOccurrence[]
+  teams                 Team[]
+  schedules             WorkSchedule[]
+  userAccess            UserUnitAccess[]
+  auditLogs             AuditLog[]
+  scheduleAssignments   ScheduleAssignment[]
+  dailyAttendances      DailyAttendance[]
+  schedulePeriods       SchedulePeriod[]
+  holidays              Holiday[]
+  scheduleImports       ScheduleImportBatch[]
+  employeeStatusHistory EmployeeStatusHistory[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+}
+
+model Department {
+  id                    String                  @id @default(cuid())
+  companyId             String
+  company               Company                 @relation(fields: [companyId], references: [id])
+  name                  String
+  code                  String?
+  isActive              Boolean                 @default(true)
+  deletedAt             DateTime?
+  deletedById           String?
+  deletedBy             User?                   @relation("DepartmentDeletedBy", fields: [deletedById], references: [id])
+  deletionReason        String?
+  employees             Employee[]
+  teams                 Team[]
+  scheduleAssignments   ScheduleAssignment[]
+  schedules             WorkSchedule[]
+  occurrenceSnapshots   EmployeeOccurrence[]
+  employeeStatusHistory EmployeeStatusHistory[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId, deletedAt, isActive])
+}
+
+model Position {
+  id        String     @id @default(cuid())
+  companyId String
+  company   Company    @relation(fields: [companyId], references: [id])
+  name      String
+  code      String?
+  isActive  Boolean    @default(true)
+  employees Employee[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([companyId, name])
+}
+
+model CostCenter {
+  id        String     @id @default(cuid())
+  companyId String
+  company   Company    @relation(fields: [companyId], references: [id])
+  name      String
+  code      String
+  isActive  Boolean    @default(true)
+  employees Employee[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([companyId, code])
+}
+
+model Team {
+  id                  String               @id @default(cuid())
+  companyId           String
+  company             Company              @relation(fields: [companyId], references: [id])
+  unitId              String?
+  unit                Unit?                @relation(fields: [unitId], references: [id])
+  departmentId        String?
+  department          Department?          @relation(fields: [departmentId], references: [id])
+  name                String
+  isActive            Boolean              @default(true)
+  employees           Employee[]
+  schedules           WorkSchedule[]
+  scheduleAssignments ScheduleAssignment[]
+  occurrences         EmployeeOccurrence[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId, unitId, isActive])
+}
+
+model WorkShift {
+  id              String               @id @default(cuid())
+  companyId       String
+  company         Company              @relation(fields: [companyId], references: [id])
+  name            String
+  code            String?
+  startMinute     Int
+  endMinute       Int
+  breakMinutes    Int                  @default(0)
+  plannedMinutes  Int?
+  crossesMidnight Boolean              @default(false)
+  color           String?
+  isActive        Boolean              @default(true)
+  schedules       WorkSchedule[]
+  patternDays     SchedulePatternDay[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([companyId, name])
+  @@unique([companyId, code])
+  @@index([companyId, isActive])
+}
+
+model WorkSchedule {
+  id               String              @id @default(cuid())
+  companyId        String
+  company          Company             @relation(fields: [companyId], references: [id])
+  unitId           String?
+  unit             Unit?               @relation(fields: [unitId], references: [id])
+  employeeId       String
+  employee         Employee            @relation(fields: [employeeId], references: [id])
+  departmentId     String?
+  department       Department?         @relation(fields: [departmentId], references: [id])
+  teamId           String?
+  team             Team?               @relation(fields: [teamId], references: [id])
+  shiftId          String?
+  shift            WorkShift?          @relation(fields: [shiftId], references: [id])
+  assignmentId     String?
+  assignment       ScheduleAssignment? @relation(fields: [assignmentId], references: [id])
+  patternDayId     String?
+  patternDay       SchedulePatternDay? @relation(fields: [patternDayId], references: [id])
+  scheduleDate     DateTime?           @db.Date
+  dayType          ScheduleDayType     @default(WORK)
+  origin           ScheduleOrigin      @default(LEGACY)
+  breakMinutes     Int                 @default(0)
+  plannedMinutes   Int?
+  startAt          DateTime
+  endAt            DateTime
+  seriesId         String?
+  status           WorkScheduleStatus  @default(ATIVA)
+  notes            String?
+  createdById      String
+  createdBy        User                @relation("ScheduleCreatedBy", fields: [createdById], references: [id])
+  updatedById      String?
+  updatedBy        User?               @relation("ScheduleUpdatedBy", fields: [updatedById], references: [id])
+  dailyAttendances DailyAttendance[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([companyId, unitId, startAt, endAt])
+  @@index([companyId, unitId, scheduleDate, status])
+  @@index([companyId, departmentId, scheduleDate])
+  @@index([employeeId, startAt, endAt, status])
+  @@index([employeeId, scheduleDate, status])
+  @@index([assignmentId, scheduleDate])
+  @@index([seriesId])
+}
+
+model SchedulePattern {
+  id          String               @id @default(cuid())
+  companyId   String
+  company     Company              @relation(fields: [companyId], references: [id])
+  name        String
+  code        String
+  description String?
+  patternType SchedulePatternType
+  cycleDays   Int
+  isActive    Boolean              @default(true)
+  days        SchedulePatternDay[]
+  assignments ScheduleAssignment[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@unique([companyId, code])
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+}
+
+model SchedulePatternDay {
+  id              String          @id @default(cuid())
+  patternId       String
+  pattern         SchedulePattern @relation(fields: [patternId], references: [id])
+  cyclePosition   Int
+  dayType         ScheduleDayType
+  shiftId         String?
+  shift           WorkShift?      @relation(fields: [shiftId], references: [id])
+  startMinute     Int?
+  endMinute       Int?
+  breakMinutes    Int             @default(0)
+  plannedMinutes  Int?
+  crossesMidnight Boolean         @default(false)
+  schedules       WorkSchedule[]
+
+  @@unique([patternId, cyclePosition])
+  @@index([shiftId])
+}
+
+model ScheduleAssignment {
+  id           String                   @id @default(cuid())
+  companyId    String
+  company      Company                  @relation(fields: [companyId], references: [id])
+  employeeId   String
+  employee     Employee                 @relation(fields: [employeeId], references: [id])
+  patternId    String
+  pattern      SchedulePattern          @relation(fields: [patternId], references: [id])
+  unitId       String?
+  unit         Unit?                    @relation(fields: [unitId], references: [id])
+  departmentId String?
+  department   Department?              @relation(fields: [departmentId], references: [id])
+  teamId       String?
+  team         Team?                    @relation(fields: [teamId], references: [id])
+  validFrom    DateTime                 @db.Date
+  validUntil   DateTime?                @db.Date
+  cycleOffset  Int                      @default(0)
+  status       ScheduleAssignmentStatus @default(ACTIVE)
+  notes        String?
+  createdById  String
+  createdBy    User                     @relation("ScheduleAssignmentCreatedBy", fields: [createdById], references: [id])
+  updatedById  String?
+  updatedBy    User?                    @relation("ScheduleAssignmentUpdatedBy", fields: [updatedById], references: [id])
+  schedules    WorkSchedule[]
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([companyId, unitId, validFrom, validUntil, status])
+  @@index([employeeId, validFrom, validUntil, status])
+  @@index([patternId, status])
+}
+
+model FrequencyType {
+  id                  String               @id @default(cuid())
+  companyId           String
+  company             Company              @relation(fields: [companyId], references: [id])
+  code                String
+  shortCode           String
+  name                String
+  category            FrequencyCategory
+  color               String
+  icon                String?
+  countsAsPresence    Boolean              @default(false)
+  countsAsAbsence     Boolean              @default(false)
+  justifiedAbsence    Boolean              @default(false)
+  requiresDocument    Boolean              @default(false)
+  requiresApproval    Boolean              @default(false)
+  affectsPlannedHours Boolean              @default(false)
+  isActive            Boolean              @default(true)
+  displayOrder        Int                  @default(0)
+  dailyAttendances    DailyAttendance[]
+  importItems         ScheduleImportItem[]
+  occurrences         EmployeeOccurrence[]
+  absenceReasons      AbsenceReason[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@unique([companyId, code])
+  @@unique([companyId, shortCode])
+  @@index([companyId, category, isActive])
+}
+
+model DailyAttendance {
+  id              String              @id @default(cuid())
+  companyId       String
+  company         Company             @relation(fields: [companyId], references: [id])
+  unitId          String?
+  unit            Unit?               @relation(fields: [unitId], references: [id])
+  employeeId      String
+  employee        Employee            @relation(fields: [employeeId], references: [id])
+  date            DateTime            @db.Date
+  workScheduleId  String?
+  workSchedule    WorkSchedule?       @relation(fields: [workScheduleId], references: [id])
+  frequencyTypeId String
+  frequencyType   FrequencyType       @relation(fields: [frequencyTypeId], references: [id])
+  occurrenceId    String?
+  occurrence      EmployeeOccurrence? @relation(fields: [occurrenceId], references: [id])
+  hours           Decimal?            @db.Decimal(8, 2)
+  days            Decimal?            @db.Decimal(6, 2)
+  notes           String?
+  status          OccurrenceStatus    @default(PENDENTE)
+  origin          ScheduleOrigin      @default(MANUAL)
+  importItemId    String?             @unique
+  importItem      ScheduleImportItem? @relation(fields: [importItemId], references: [id])
+  createdById     String
+  createdBy       User                @relation("DailyAttendanceCreatedBy", fields: [createdById], references: [id])
+  updatedById     String?
+  updatedBy       User?               @relation("DailyAttendanceUpdatedBy", fields: [updatedById], references: [id])
+  approvedById    String?
+  approvedBy      User?               @relation("DailyAttendanceApprovedBy", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([companyId, unitId, date, status])
+  @@index([employeeId, date, deletedAt])
+  @@index([frequencyTypeId, date, status])
+  @@index([workScheduleId])
+  @@index([occurrenceId])
+}
+
+model SchedulePeriod {
+  id           String               @id @default(cuid())
+  companyId    String
+  company      Company              @relation(fields: [companyId], references: [id])
+  unitId       String?
+  unit         Unit?                @relation(fields: [unitId], references: [id])
+  competence   DateTime             @db.Date
+  status       SchedulePeriodStatus @default(OPEN)
+  closeReason  String?
+  reopenReason String?
+  closedById   String?
+  closedBy     User?                @relation("SchedulePeriodClosedBy", fields: [closedById], references: [id])
+  closedAt     DateTime?
+  reopenedById String?
+  reopenedBy   User?                @relation("SchedulePeriodReopenedBy", fields: [reopenedById], references: [id])
+  reopenedAt   DateTime?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([companyId, unitId, competence, status])
+}
+
+model Holiday {
+  id        String       @id @default(cuid())
+  companyId String
+  company   Company      @relation(fields: [companyId], references: [id])
+  unitId    String?
+  unit      Unit?        @relation(fields: [unitId], references: [id])
+  date      DateTime     @db.Date
+  name      String
+  scope     HolidayScope
+  state     String?
+  city      String?
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([companyId, unitId, date, isActive])
+}
+
+model ScheduleImportBatch {
+  id           String               @id @default(cuid())
+  companyId    String
+  company      Company              @relation(fields: [companyId], references: [id])
+  unitId       String?
+  unit         Unit?                @relation(fields: [unitId], references: [id])
+  sheetName    String
+  competence   DateTime             @db.Date
+  originalName String
+  contentHash  String
+  status       ScheduleImportStatus @default(VALIDATING)
+  adDecision   Json?
+  summary      Json?
+  createdById  String
+  createdBy    User                 @relation("ScheduleImportCreatedBy", fields: [createdById], references: [id])
+  importedAt   DateTime?
+  items        ScheduleImportItem[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@unique([companyId, contentHash, sheetName])
+  @@index([companyId, competence, status])
+}
+
+model ScheduleImportItem {
+  id                 String                   @id @default(cuid())
+  batchId            String
+  batch              ScheduleImportBatch      @relation(fields: [batchId], references: [id])
+  sourceRow          Int
+  sourceEmployeeKey  String
+  sourceName         String
+  sourceRegistration String?
+  employeeId         String?
+  employee           Employee?                @relation(fields: [employeeId], references: [id])
+  date               DateTime?                @db.Date
+  sourceCode         String
+  frequencyTypeId    String?
+  frequencyType      FrequencyType?           @relation(fields: [frequencyTypeId], references: [id])
+  status             ScheduleImportItemStatus
+  issue              Json?
+  sourcePayload      Json?
+  attendance         DailyAttendance?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  @@unique([batchId, sourceEmployeeKey, date])
+  @@index([batchId, status])
+  @@index([employeeId, date])
+}
+
+model AbsenceReason {
+  id              String                 @id @default(cuid())
+  companyId       String
+  company         Company                @relation(fields: [companyId], references: [id])
+  name            String
+  occurrenceType  EmployeeOccurrenceType
+  frequencyTypeId String?
+  frequencyType   FrequencyType?         @relation(fields: [frequencyTypeId], references: [id])
+  isActive        Boolean                @default(true)
+  occurrences     EmployeeOccurrence[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId, frequencyTypeId, isActive])
+}
+
+model RolePermission {
+  role       UserRole
+  permission HrPermission
+  createdAt  DateTime     @default(now())
+
+  @@id([role, permission])
+}
+
+model UserCompanyAccess {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@id([userId, companyId])
+}
+
+model UserUnitAccess {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  unitId    String
+  unit      Unit     @relation(fields: [unitId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@id([userId, unitId])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  companyId     String?
+  company       Company? @relation(fields: [companyId], references: [id])
+  unitId        String?
+  unit          Unit?    @relation(fields: [unitId], references: [id])
+  actorUserId   String?
+  actorUser     User?    @relation(fields: [actorUserId], references: [id])
+  action        String
+  entityType    String
+  entityId      String
+  previousValue Json?
+  newValue      Json?
+  metadata      Json?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
 }

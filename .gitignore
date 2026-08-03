@@ -5,6 +5,8 @@ apps/*/dist
 apps/*/.vite
 apps/api/uploads/*
 !apps/api/uploads/.gitkeep
+apps/api/private-uploads/*
+!apps/api/private-uploads/.gitkeep
 .env
 apps/api/.env
 tmp-extracted

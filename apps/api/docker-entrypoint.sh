@@ -1,8 +1,12 @@
 #!/bin/sh
 set -e
 
-echo "Aplicando schema no banco..."
-npm run prisma:deploy
+if [ "${RUN_MIGRATIONS_ON_START:-false}" = "true" ]; then
+  echo "RUN_MIGRATIONS_ON_START=true -> aplicando migracoes pendentes..."
+  npm run prisma:deploy
+else
+  echo "RUN_MIGRATIONS_ON_START=false -> migracoes nao executadas automaticamente."
+fi
 
 if [ "${RUN_SEED_ON_START:-false}" = "true" ]; then
   echo "RUN_SEED_ON_START=true -> executando seed..."

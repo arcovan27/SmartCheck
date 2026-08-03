@@ -1,7 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { ConfirmationMethod, EpiMovementType, Prisma } from "@prisma/client";
+import { ConfirmationMethod, EpiMovementType, HrPermission, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
+import { writeAudit } from "../services/audit.js";
+import { snapshotEpiCost } from "../services/epiCosts.js";
+import { assertCompanyAccess, assertUnitAccess, publicUserSelect, requireHrPermission, resolveHrDataScope, unitScopeFilter } from "../services/hrAccess.js";
+import { assertOrganizationReferences } from "../services/hrOrganization.js";
 
 function parseDeliveryDate(value?: string | Date) {
   if (!value) return new Date();
@@ -33,10 +37,12 @@ function parseDeliveryDate(value?: string | Date) {
 }
 
 export async function epiRoutes(app: FastifyInstance) {
-  app.get("/epis", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/epis", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_VIEW)] }, async (request) => {
     const query = z
       .object({
         search: z.string().optional(),
+        companyId: z.string().optional(),
+        unitId: z.string().optional(),
         isActive: z
           .string()
           .optional()
@@ -46,9 +52,13 @@ export async function epiRoutes(app: FastifyInstance) {
           })
       })
       .parse(request.query);
+    const scope = await resolveHrDataScope(request);
+    if (query.companyId) assertCompanyAccess(scope, query.companyId);
 
     return prisma.epi.findMany({
       where: {
+        companyId: { in: query.companyId ? [query.companyId] : scope.companyIds },
+        unitId: unitScopeFilter(scope, query.unitId),
         isActive: query.isActive,
         OR: query.search
           ? [
@@ -62,14 +72,15 @@ export async function epiRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/epis/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get("/epis/:id", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_VIEW)] }, async (request, reply) => {
     const params = z.object({ id: z.string().cuid() }).parse(request.params);
+    const scope = await resolveHrDataScope(request);
 
-    const epi = await prisma.epi.findUnique({
-      where: { id: params.id },
+    const epi = await prisma.epi.findFirst({
+      where: { id: params.id, companyId: { in: scope.companyIds }, unitId: scope.allUnitsInCompanies ? undefined : { in: scope.unitIds } },
       include: {
         movements: {
-          include: { employee: true, responsibleUser: true },
+          include: { employee: true, responsibleUser: { select: publicUserSelect } },
           orderBy: { date: "desc" },
           take: 50
         }
@@ -83,7 +94,7 @@ export async function epiRoutes(app: FastifyInstance) {
     return epi;
   });
 
-  app.post("/epis", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post("/epis", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_MANAGE)] }, async (request, reply) => {
     const body = z
       .object({
         name: z.string().min(2),
@@ -96,20 +107,27 @@ export async function epiRoutes(app: FastifyInstance) {
         stock: z.number().int().min(0),
         minimumStock: z.number().int().min(0),
         isActive: z.boolean().optional()
+        ,companyId: z.string().optional()
+        ,unitId: z.string().optional().nullable()
       })
       .parse(request.body);
+    const scope = await resolveHrDataScope(request);
+    const companyId = body.companyId ?? (scope.companyIds.length === 1 ? scope.companyIds[0] : undefined);
+    if (!companyId) return reply.code(400).send({ message: "Informe a empresa do EPI" });
+    assertCompanyAccess(scope, companyId);
+    assertUnitAccess(scope, body.unitId);
+    await assertOrganizationReferences(companyId, body);
 
-    const epi = await prisma.epi.create({
-      data: {
-        ...body,
-        isActive: body.isActive ?? true
-      }
+    const epi = await prisma.$transaction(async (tx) => {
+      const created = await tx.epi.create({ data: { ...body, companyId, isActive: body.isActive ?? true } });
+      await writeAudit(tx, request, { companyId, unitId: body.unitId, action: "EPI_CREATE", entityType: "Epi", entityId: created.id, newValue: created });
+      return created;
     });
 
     return reply.code(201).send(epi);
   });
 
-  app.patch("/epis/:id", { preHandler: [app.authenticate] }, async (request) => {
+  app.patch("/epis/:id", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_MANAGE)] }, async (request, reply) => {
     const params = z.object({ id: z.string().cuid() }).parse(request.params);
     const body = z
       .object({
@@ -123,21 +141,35 @@ export async function epiRoutes(app: FastifyInstance) {
         stock: z.number().int().min(0).optional(),
         minimumStock: z.number().int().min(0).optional(),
         isActive: z.boolean().optional()
+        ,companyId: z.string().optional()
+        ,unitId: z.string().optional().nullable()
       })
       .parse(request.body);
+    const scope = await resolveHrDataScope(request);
+    const existing = await prisma.epi.findFirst({ where: { id: params.id, companyId: { in: scope.companyIds } } });
+    if (!existing) return reply.code(404).send({ message: "EPI nao encontrado" });
+    if (body.companyId) assertCompanyAccess(scope, body.companyId);
+    assertUnitAccess(scope, body.unitId);
+    const nextCompanyId = body.companyId ?? existing.companyId;
+    if (nextCompanyId) await assertOrganizationReferences(nextCompanyId, body);
 
-    return prisma.epi.update({
-      where: { id: params.id },
-      data: body
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.epi.update({ where: { id: params.id }, data: body });
+      await writeAudit(tx, request, { companyId: updated.companyId, unitId: updated.unitId, action: "EPI_UPDATE", entityType: "Epi", entityId: updated.id, previousValue: existing, newValue: updated });
+      return updated;
     });
   });
 
-  app.delete("/epis/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.delete("/epis/:id", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_MANAGE)] }, async (request, reply) => {
     const params = z.object({ id: z.string().cuid() }).parse(request.params);
+    const scope = await resolveHrDataScope(request);
+    const existing = await prisma.epi.findFirst({ where: { id: params.id, companyId: { in: scope.companyIds } } });
+    if (!existing) return reply.code(404).send({ message: "EPI nao encontrado" });
 
     try {
-      await prisma.epi.delete({
-        where: { id: params.id }
+      await prisma.$transaction(async (tx) => {
+        await tx.epi.delete({ where: { id: params.id } });
+        await writeAudit(tx, request, { companyId: existing.companyId, unitId: existing.unitId, action: "EPI_DELETE", entityType: "Epi", entityId: existing.id, previousValue: existing });
       });
       return reply.send({ message: "EPI apagado com sucesso" });
     } catch (error) {
@@ -156,17 +188,23 @@ export async function epiRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get("/epi-deliveries", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/epi-deliveries", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_VIEW)] }, async (request) => {
     const query = z
       .object({
         employeeId: z.string().cuid().optional(),
         epiId: z.string().cuid().optional(),
         movementType: z.nativeEnum(EpiMovementType).optional()
+        ,companyId: z.string().optional()
+        ,unitId: z.string().optional()
       })
       .parse(request.query);
+    const scope = await resolveHrDataScope(request);
+    if (query.companyId) assertCompanyAccess(scope, query.companyId);
 
     return prisma.epiDelivery.findMany({
       where: {
+        companyId: { in: query.companyId ? [query.companyId] : scope.companyIds },
+        unitId: unitScopeFilter(scope, query.unitId),
         employeeId: query.employeeId,
         epiId: query.epiId,
         movementType: query.movementType
@@ -175,7 +213,7 @@ export async function epiRoutes(app: FastifyInstance) {
         employee: true,
         epi: true,
         responsibleUser: {
-          include: { employee: true }
+          select: { ...publicUserSelect, employee: { select: { id: true, name: true } } }
         },
         attachments: true
       },
@@ -183,7 +221,7 @@ export async function epiRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/epi-deliveries", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post("/epi-deliveries", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_MANAGE)] }, async (request, reply) => {
     const body = z
       .object({
         employeeId: z.string().cuid(),
@@ -197,8 +235,10 @@ export async function epiRoutes(app: FastifyInstance) {
         employeeSignatureName: z.string().min(2),
         employeeConfirmedAt: z.coerce.date().optional().nullable(),
         attachmentIds: z.array(z.string().cuid()).optional()
+        ,movementReason: z.string().max(500).optional().nullable()
       })
       .parse(request.body);
+    const scope = await resolveHrDataScope(request);
 
     if (body.confirmationMethod === ConfirmationMethod.BIOMETRIA && !body.confirmationBiometricId) {
       return reply
@@ -207,20 +247,23 @@ export async function epiRoutes(app: FastifyInstance) {
     }
 
     const delivery = await prisma.$transaction(async (tx) => {
-      const epi = await tx.epi.findUniqueOrThrow({ where: { id: body.epiId } });
-      const nextStock =
-        body.movementType === EpiMovementType.ENTREGA ? epi.stock - body.quantity : epi.stock + body.quantity;
+      const employee = await tx.employee.findFirst({ where: { id: body.employeeId, companyId: { in: scope.companyIds } } });
+      const epi = await tx.epi.findFirst({ where: { id: body.epiId, companyId: { in: scope.companyIds } } });
+      if (!employee || !epi || !employee.companyId || employee.companyId !== epi.companyId) throw new Error("Funcionario e EPI devem pertencer a mesma empresa autorizada");
+      assertUnitAccess(scope, employee.unitId);
 
-      if (nextStock < 0) {
-        throw new Error("Estoque insuficiente para esta entrega");
+      if (body.movementType === EpiMovementType.DEVOLUCAO) {
+        const movements = await tx.epiDelivery.groupBy({ by: ["movementType"], where: { employeeId: employee.id, epiId: epi.id }, _sum: { quantity: true } });
+        const issued = movements.filter((item) => item.movementType !== EpiMovementType.DEVOLUCAO).reduce((sum, item) => sum + (item._sum.quantity ?? 0), 0);
+        const returned = movements.find((item) => item.movementType === EpiMovementType.DEVOLUCAO)?._sum.quantity ?? 0;
+        if (issued - returned < body.quantity) throw new Error("A devolucao excede a quantidade entregue ao funcionario");
+        await tx.epi.update({ where: { id: epi.id }, data: { stock: { increment: body.quantity } } });
+      } else {
+        const stockUpdate = await tx.epi.updateMany({ where: { id: epi.id, stock: { gte: body.quantity } }, data: { stock: { decrement: body.quantity } } });
+        if (stockUpdate.count !== 1) throw new Error("Estoque insuficiente para esta movimentacao");
       }
 
-      await tx.epi.update({
-        where: { id: body.epiId },
-        data: { stock: nextStock }
-      });
-
-      return tx.epiDelivery.create({
+      const created = await tx.epiDelivery.create({
         data: {
           employeeId: body.employeeId,
           epiId: body.epiId,
@@ -233,6 +276,13 @@ export async function epiRoutes(app: FastifyInstance) {
           confirmationBiometricId: body.confirmationBiometricId,
           employeeSignatureName: body.employeeSignatureName,
           employeeConfirmedAt: body.employeeConfirmedAt ?? new Date(),
+          companyId: employee.companyId,
+          unitId: employee.unitId,
+          ...snapshotEpiCost(epi.purchasePrice),
+          departmentSnapshot: employee.department,
+          positionSnapshot: employee.position,
+          costCenterSnapshot: null,
+          movementReason: body.movementReason,
           attachments: body.attachmentIds
             ? { connect: body.attachmentIds.map((id) => ({ id })) }
             : undefined
@@ -241,24 +291,27 @@ export async function epiRoutes(app: FastifyInstance) {
           employee: true,
           epi: true,
           responsibleUser: {
-            include: { employee: true }
+            select: { ...publicUserSelect, employee: { select: { id: true, name: true } } }
           },
           attachments: true
         }
       });
-    });
+      await writeAudit(tx, request, { companyId: employee.companyId, unitId: employee.unitId, action: `EPI_${body.movementType}`, entityType: "EpiDelivery", entityId: created.id, newValue: created });
+      return created;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     return reply.code(201).send(delivery);
   });
 
   app.get(
     "/reports/epi-by-employee/:employeeId",
-    { preHandler: [app.authenticate] },
+    { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_VIEW)] },
     async (request, reply) => {
       const params = z.object({ employeeId: z.string().cuid() }).parse(request.params);
 
-      const employee = await prisma.employee.findUnique({
-        where: { id: params.employeeId },
+      const scope = await resolveHrDataScope(request);
+      const employee = await prisma.employee.findFirst({
+        where: { id: params.employeeId, companyId: { in: scope.companyIds } },
         include: { biometric: true }
       });
       if (!employee) {
@@ -270,7 +323,7 @@ export async function epiRoutes(app: FastifyInstance) {
         include: {
           epi: true,
           responsibleUser: {
-            include: { employee: true }
+            select: { ...publicUserSelect, employee: { select: { id: true, name: true } } }
           }
         },
         orderBy: { date: "desc" }

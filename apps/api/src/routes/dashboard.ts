@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { MaintenanceStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
+import { publicUserSelect } from "../services/hrAccess.js";
 
 function startOfToday(date: Date) {
   const result = new Date(date);
@@ -74,7 +75,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         take: 5
       }),
       prisma.epiDelivery.findMany({
-        include: { employee: true, epi: true, responsibleUser: true },
+        include: { employee: true, epi: true, responsibleUser: { select: publicUserSelect } },
         orderBy: { date: "desc" },
         take: 5
       })

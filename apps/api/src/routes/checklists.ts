@@ -403,7 +403,7 @@ export async function checklistRoutes(app: FastifyInstance) {
 
     const authenticatedEmployee = await prisma.employee.findUnique({
       where: { id: request.user.employeeId },
-      select: { isActive: true }
+      select: { isActive: true, department: true, departmentRef: { select: { name: true } } }
     });
     if (!authenticatedEmployee?.isActive) {
       return reply.code(403).send({ message: "O funcionario autenticado esta inativo ou nao foi encontrado." });
@@ -508,6 +508,7 @@ export async function checklistRoutes(app: FastifyInstance) {
           templateId: body.templateId,
           equipmentId: body.equipmentId,
           employeeId: body.employeeId,
+          departmentNameSnapshot: authenticatedEmployee.departmentRef?.name ?? authenticatedEmployee.department,
           readingMode: template.readingMode,
           monthReference: body.monthReference,
           operatorName: body.operatorName,

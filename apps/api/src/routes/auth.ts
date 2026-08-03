@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
+import { listHrPermissions, publicUserSelect } from "../services/hrAccess.js";
 
 const userCreateSchema = z.object({
   email: z.string().email(),
@@ -51,6 +52,7 @@ export async function authRoutes(app: FastifyInstance) {
       tokenType: "SESSION"
     });
 
+    const permissions = await listHrPermissions(user.role);
     return {
       token,
       user: {
@@ -58,7 +60,8 @@ export async function authRoutes(app: FastifyInstance) {
         email: user.email,
         role: user.role,
         isActive: user.isActive,
-        employee: user.employee
+        employee: user.employee,
+        permissions
       }
     };
   });
@@ -96,13 +99,15 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(404).send({ message: "Usuário não encontrado" });
     }
 
+    const permissions = await listHrPermissions(user.role);
     return {
       id: user.id,
       email: user.email,
       role: user.role,
       isActive: user.isActive,
       checklistOnly: false,
-      employee: user.employee
+      employee: user.employee,
+      permissions
     };
   });
 
@@ -200,7 +205,12 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     return prisma.user.findMany({
-      include: { employee: true },
+      select: {
+        ...publicUserSelect,
+        employee: { select: { id: true, name: true, registration: true, isActive: true } },
+        companyAccess: { select: { company: { select: { id: true, legalName: true, tradeName: true } } } },
+        unitAccess: { select: { unit: { select: { id: true, name: true, companyId: true } } } }
+      },
       orderBy: { createdAt: "desc" }
     });
   });
@@ -221,7 +231,7 @@ export async function authRoutes(app: FastifyInstance) {
         employeeId: body.employeeId,
         isActive: body.isActive ?? true
       },
-      include: { employee: true }
+      select: { ...publicUserSelect, employee: { select: { id: true, name: true, registration: true, isActive: true } } }
     });
 
     return reply.code(201).send(user);
@@ -238,7 +248,7 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await prisma.user.update({
       where: { id: params.id },
       data: body,
-      include: { employee: true }
+      select: { ...publicUserSelect, employee: { select: { id: true, name: true, registration: true, isActive: true } } }
     });
 
     return user;

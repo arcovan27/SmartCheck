@@ -29,9 +29,12 @@ services:
       JWT_SECRET: supersecretkey
       WEB_ORIGIN: http://192.168.2.100:5175
       UPLOAD_DIR: uploads
+      PRIVATE_UPLOAD_DIR: private-uploads
+      RUN_MIGRATIONS_ON_START: "false"
       RUN_SEED_ON_START: "false"
     volumes:
       - ./apps/api/uploads:/app/apps/api/uploads
+      - ./apps/api/private-uploads:/app/apps/api/private-uploads
       - ./apps/api:/app/apps/api
       - ./package.json:/app/package.json
       - /app/node_modules

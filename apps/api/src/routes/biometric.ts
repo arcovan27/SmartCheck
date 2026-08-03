@@ -1,12 +1,15 @@
 ﻿import type { FastifyInstance } from "fastify";
-import { BiometricProvider, BiometricStatus } from "@prisma/client";
+import { BiometricProvider, BiometricStatus, HrPermission } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
+import { requireAnyHrPermission, requireHrPermission, resolveHrDataScope } from "../services/hrAccess.js";
 
 export async function biometricRoutes(app: FastifyInstance) {
-  app.get("/biometric/templates", { preHandler: [app.authenticate] }, async () => {
+  app.get("/biometric/templates", { preHandler: [app.authenticate, requireAnyHrPermission(HrPermission.EPI_MANAGE, HrPermission.EMPLOYEE_MANAGE)] }, async (request) => {
+    const scope = await resolveHrDataScope(request);
     return prisma.employeeBiometric.findMany({
       where: {
+        employee: { companyId: { in: scope.companyIds }, unitId: scope.allUnitsInCompanies ? undefined : { in: scope.unitIds } },
         provider: BiometricProvider.UAREU_4500,
         status: BiometricStatus.CADASTRADA,
         biometricTemplateId: { not: null }
@@ -20,7 +23,7 @@ export async function biometricRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/biometric/enroll/start", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post("/biometric/enroll/start", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EMPLOYEE_MANAGE)] }, async (request, reply) => {
     const body = z
       .object({
         employeeId: z.string().cuid(),
@@ -28,7 +31,8 @@ export async function biometricRoutes(app: FastifyInstance) {
       })
       .parse(request.body);
 
-    const employee = await prisma.employee.findUnique({ where: { id: body.employeeId } });
+    const scope = await resolveHrDataScope(request);
+    const employee = await prisma.employee.findFirst({ where: { id: body.employeeId, companyId: { in: scope.companyIds } } });
     if (!employee) {
       return reply.code(404).send({ message: "Funcionário não encontrado" });
     }
@@ -52,7 +56,7 @@ export async function biometricRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/biometric/enroll/finish", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post("/biometric/enroll/finish", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EMPLOYEE_MANAGE)] }, async (request, reply) => {
     const body = z
       .object({
         employeeId: z.string().cuid(),
@@ -64,6 +68,9 @@ export async function biometricRoutes(app: FastifyInstance) {
         message: "Informe biometricTemplateId ou biometricExternalId"
       })
       .parse(request.body);
+    const scope = await resolveHrDataScope(request);
+    const employee = await prisma.employee.findFirst({ where: { id: body.employeeId, companyId: { in: scope.companyIds } }, select: { id: true } });
+    if (!employee) return reply.code(404).send({ message: "Funcionario nao encontrado" });
 
     const biometric = await prisma.employeeBiometric.upsert({
       where: { employeeId: body.employeeId },
@@ -85,7 +92,7 @@ export async function biometricRoutes(app: FastifyInstance) {
     return reply.code(201).send({ message: "Biometria cadastrada com sucesso", biometric });
   });
 
-  app.post("/biometric/identify", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post("/biometric/identify", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_MANAGE)] }, async (request, reply) => {
     const body = z
       .object({
         biometricExternalId: z.string().optional(),
@@ -95,6 +102,7 @@ export async function biometricRoutes(app: FastifyInstance) {
         message: "Informe biometricExternalId ou biometricTemplateId"
       })
       .parse(request.body);
+    const scope = await resolveHrDataScope(request);
 
     const biometric = await prisma.employeeBiometric.findFirst({
       where: {
@@ -106,7 +114,7 @@ export async function biometricRoutes(app: FastifyInstance) {
       include: { employee: true }
     });
 
-    if (!biometric) {
+    if (!biometric || !biometric.employee.companyId || !scope.companyIds.includes(biometric.employee.companyId) || (!scope.allUnitsInCompanies && biometric.employee.unitId && !scope.unitIds.includes(biometric.employee.unitId))) {
       return reply.code(404).send({ message: "Biometria não identificada" });
     }
 
@@ -125,11 +133,12 @@ export async function biometricRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/employees/:id/biometric", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get("/employees/:id/biometric", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EMPLOYEE_VIEW)] }, async (request, reply) => {
     const params = z.object({ id: z.string().cuid() }).parse(request.params);
 
-    const biometric = await prisma.employeeBiometric.findUnique({
-      where: { employeeId: params.id }
+    const scope = await resolveHrDataScope(request);
+    const biometric = await prisma.employeeBiometric.findFirst({
+      where: { employeeId: params.id, employee: { companyId: { in: scope.companyIds } } }
     });
 
     if (!biometric) {
@@ -139,10 +148,11 @@ export async function biometricRoutes(app: FastifyInstance) {
     return biometric;
   });
 
-  app.delete("/employees/:id/biometric", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.delete("/employees/:id/biometric", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EMPLOYEE_MANAGE)] }, async (request, reply) => {
     const params = z.object({ id: z.string().cuid() }).parse(request.params);
 
-    const existing = await prisma.employeeBiometric.findUnique({ where: { employeeId: params.id } });
+    const scope = await resolveHrDataScope(request);
+    const existing = await prisma.employeeBiometric.findFirst({ where: { employeeId: params.id, employee: { companyId: { in: scope.companyIds } } } });
 
     if (!existing) {
       return reply.code(404).send({ message: "Nenhuma biometria vinculada para este funcionário" });

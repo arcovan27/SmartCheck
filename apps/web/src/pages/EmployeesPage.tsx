@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { API_URL, apiRequest, getUploadedFileUrl, uploadFile } from "../lib/api";
+import { API_URL, apiRequest, downloadProtectedDocument, getUploadedFileUrl, uploadFile } from "../lib/api";
 import { roleLabels } from "../lib/constants";
 import { formatBrazilDate, toBrazilDateInputValue } from "../lib/datetime";
 import type { UserRole } from "../lib/auth";
@@ -18,6 +18,11 @@ type Employee = {
   admissionDate?: string | null;
   dismissalDate?: string | null;
   isActive: boolean;
+  inactiveEffectiveDate?: string | null;
+  inactiveReason?: "TERMINATED_BY_COMPANY" | "VOLUNTARY_RESIGNATION" | null;
+  company?: { legalName: string; tradeName?: string | null } | null;
+  unitRef?: { name: string } | null;
+  departmentRef?: { name: string } | null;
   notes?: string | null;
   user?: { id: string; email: string; role: UserRole; isActive: boolean } | null;
   biometric?: {
@@ -70,8 +75,10 @@ export function EmployeesPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState("");
+  const [statusTarget, setStatusTarget] = useState<Employee | null>(null);
+  const [statusForm, setStatusForm] = useState({ reason: "TERMINATED_BY_COMPANY", effectiveDate: toBrazilDateInputValue(), notes: "", confirmFutureSchedules: false });
   const [occurrenceForm, setOccurrenceForm] = useState({
-    type: "OUTRO",
+    type: "FALTA_INJ",
     date: toBrazilDateInputValue(),
     description: "",
     daysAway: "",
@@ -150,36 +157,24 @@ export function EmployeesPage() {
     }
   });
 
-  const statusMutation = useMutation({
-    mutationFn: (payload: { id: string; isActive: boolean }) =>
-      apiRequest(`/employees/${payload.id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ isActive: payload.isActive })
-      }),
-    onSuccess: async (_, payload) => {
-      setActionMessage("");
-      await queryClient.invalidateQueries({ queryKey: ["employees"] });
-      if (selectedId === payload.id) {
-        setForm((prev) => ({ ...prev, isActive: payload.isActive }));
-        await queryClient.invalidateQueries({ queryKey: ["employee-details", payload.id] });
-      }
-    }
+  const inactivationImpactQuery = useQuery({
+    queryKey: ["employee-inactivation-impact", statusTarget?.id, statusForm.effectiveDate],
+    queryFn: () => apiRequest<{ impact: { futureSchedules: number; futureAssignments: number; spanningAssignments: number; totalAssignments: number } }>(`/employees/${statusTarget?.id}/inactivation-impact?effectiveDate=${statusForm.effectiveDate}`),
+    enabled: Boolean(statusTarget?.isActive && statusForm.effectiveDate)
   });
-
-  const deleteMutation = useMutation({
-    mutationFn: (employeeId: string) =>
-      apiRequest<{ message: string }>(`/employees/${employeeId}`, {
-        method: "DELETE"
-      }),
-    onSuccess: async (_, employeeId) => {
-      setActionMessage("Funcionario excluido com sucesso.");
+  const lifecycleMutation = useMutation({
+    mutationFn: () => {
+      if (!statusTarget) throw new Error("Selecione o funcionario");
+      return statusTarget.isActive
+        ? apiRequest<{ message: string }>(`/employees/${statusTarget.id}/inactivate`, { method: "POST", body: JSON.stringify(statusForm) })
+        : apiRequest<{ message: string }>(`/employees/${statusTarget.id}/reactivate`, { method: "POST", body: JSON.stringify({ effectiveDate: statusForm.effectiveDate, notes: statusForm.notes || null }) });
+    },
+    onSuccess: async (result) => {
+      const employeeId = statusTarget?.id;
+      setActionMessage(result.message);
+      setStatusTarget(null);
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
-      if (selectedId === employeeId) {
-        setSelectedId(null);
-        setForm(emptyForm);
-        setPhotoFile(null);
-        setPhotoPreviewUrl(null);
-      }
+      if (employeeId) await queryClient.invalidateQueries({ queryKey: ["employee-details", employeeId] });
     }
   });
 
@@ -192,35 +187,30 @@ export function EmployeesPage() {
       daysAway?: number | null;
       notes?: string | null;
     }) => {
-      let attachmentPath: string | null = null;
-      let attachmentMimeType: string | null = null;
-      let attachmentFilename: string | null = null;
-
-      if (occurrenceFile) {
-        const uploaded = await uploadFile(occurrenceFile);
-        attachmentPath = uploaded.path;
-        attachmentMimeType = occurrenceFile.type || null;
-        attachmentFilename = occurrenceFile.name || null;
-      }
-
-      return apiRequest(`/employees/${payload.employeeId}/occurrences`, {
+      const endDate = payload.daysAway && payload.daysAway > 1 ? new Date(new Date(`${payload.date}T12:00:00-03:00`).getTime() + (payload.daysAway - 1) * 86_400_000).toISOString() : null;
+      const occurrence = await apiRequest<{ id: string }>("/hr/occurrences", {
         method: "POST",
         body: JSON.stringify({
-          type: payload.type,
-          date: payload.date,
+          employeeId: payload.employeeId,
+          frequencyCode: payload.type,
+          startDate: `${payload.date}T12:00:00-03:00`,
+          endDate,
           description: payload.description,
-          daysAway: payload.daysAway ?? null,
-          notes: payload.notes ?? null,
-          attachmentPath,
-          attachmentMimeType,
-          attachmentFilename
+          isJustified: payload.type !== "FALTA_INJ",
+          notes: payload.notes ?? null
         })
       });
+      if (occurrenceFile) {
+        const formData = new FormData();
+        formData.append("file", occurrenceFile);
+        await apiRequest(`/hr/occurrences/${occurrence.id}/documents`, { method: "POST", body: formData });
+      }
+      return occurrence;
     },
     onSuccess: async () => {
       setActionMessage("Ocorrencia registrada com sucesso.");
       setOccurrenceForm({
-        type: "OUTRO",
+        type: "FALTA_INJ",
         date: toBrazilDateInputValue(),
         description: "",
         daysAway: "",
@@ -236,7 +226,7 @@ export function EmployeesPage() {
 
   const deleteOccurrenceMutation = useMutation({
     mutationFn: (payload: { employeeId: string; occurrenceId: string }) =>
-      apiRequest(`/employees/${payload.employeeId}/occurrences/${payload.occurrenceId}`, {
+      apiRequest(`/hr/occurrences/${payload.occurrenceId}`, {
         method: "DELETE"
       }),
     onSuccess: async () => {
@@ -457,8 +447,7 @@ export function EmployeesPage() {
         )}
 
         {(actionMessage ||
-          statusMutation.isError ||
-          deleteMutation.isError ||
+          lifecycleMutation.isError ||
           createOccurrenceMutation.isError ||
           deleteOccurrenceMutation.isError ||
           enrollWithAgent.isError ||
@@ -467,8 +456,7 @@ export function EmployeesPage() {
           checklistLinkMutation.isError) && (
           <div
             className={`rounded-xl p-3 text-sm ${
-              statusMutation.isError ||
-              deleteMutation.isError ||
+              lifecycleMutation.isError ||
               createOccurrenceMutation.isError ||
               deleteOccurrenceMutation.isError ||
               enrollWithAgent.isError ||
@@ -479,10 +467,8 @@ export function EmployeesPage() {
                 : "bg-emerald-50 text-emerald-700"
             }`}
           >
-            {deleteMutation.isError
-              ? (deleteMutation.error as Error).message
-              : statusMutation.isError
-                ? (statusMutation.error as Error).message
+            {lifecycleMutation.isError
+              ? (lifecycleMutation.error as Error).message
                 : createOccurrenceMutation.isError
                   ? (createOccurrenceMutation.error as Error).message
                   : deleteOccurrenceMutation.isError
@@ -545,23 +531,13 @@ export function EmployeesPage() {
                 <button
                   type="button"
                   className={employee.isActive ? "btn-danger" : "btn-primary"}
-                  onClick={() => statusMutation.mutate({ id: employee.id, isActive: !employee.isActive })}
+                  onClick={() => {
+                    setStatusTarget(employee);
+                    setStatusForm({ reason: "TERMINATED_BY_COMPANY", effectiveDate: toBrazilDateInputValue(), notes: "", confirmFutureSchedules: false });
+                  }}
                 >
-                  {employee.isActive ? "Inativar" : "Ativar"}
+                  {employee.isActive ? "Inativar" : "Reativar"}
                 </button>
-                {!employee.isActive && (
-                  <button
-                    type="button"
-                    className="btn-danger"
-                    onClick={() => {
-                      if (window.confirm(`Excluir o funcionario ${employee.name}?`)) {
-                        deleteMutation.mutate(employee.id);
-                      }
-                    }}
-                  >
-                    Excluir
-                  </button>
-                )}
               </div>
             </div>
           ))}
@@ -699,6 +675,7 @@ export function EmployeesPage() {
             <input
               type="checkbox"
               checked={form.isActive}
+              disabled={Boolean(selectedEmployee)}
               onChange={(event) => setForm({ ...form, isActive: event.target.checked })}
             />
             Funcionario ativo
@@ -807,6 +784,7 @@ export function EmployeesPage() {
         {selectedEmployee && (
           <div className="space-y-3 rounded-xl border border-slate-200 p-3">
             <h3 className="font-semibold">Ocorrencias do funcionario</h3>
+            <p className="text-xs text-slate-600">Advertência, suspensão e acidente de trabalho usam o fluxo protegido em <a className="font-bold text-brand-700 underline" href="/recursos-humanos/funcionarios">Recursos Humanos → Funcionários</a>.</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <select
                 className="select"
@@ -815,10 +793,11 @@ export function EmployeesPage() {
                   setOccurrenceForm((prev) => ({ ...prev, type: event.target.value }))
                 }
               >
-                <option value="ATESTADO_MEDICO">Atestado médico</option>
-                <option value="FALTA">Falta</option>
-                <option value="ADVERTENCIA">Advertência</option>
-                <option value="OUTRO">Outro</option>
+                <option value="ATEST">Atestado médico</option>
+                <option value="FALTA_INJ">Falta injustificada</option>
+                <option value="FALTA_JUST">Falta justificada</option>
+                <option value="FERIAS">Férias</option>
+                <option value="AUX_DOENCA">Afastamento</option>
               </select>
               <input
                 className="input"
@@ -930,6 +909,20 @@ export function EmployeesPage() {
                           )}
                         </div>
                       ) : null}
+                      {occurrence.attachments?.length ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {occurrence.attachments.map((attachment: any) => (
+                            <button
+                              key={attachment.id}
+                              type="button"
+                              className="text-sm font-medium text-cyan-700 underline"
+                              onClick={() => downloadProtectedDocument(attachment.id, attachment.filename)}
+                            >
+                              Baixar {attachment.filename}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                     <button
                       type="button"
@@ -979,6 +972,8 @@ export function EmployeesPage() {
           </div>
         )}
       </section>
+
+      {statusTarget ? <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="employee-status-title"><form className="w-full max-w-xl rounded-[28px] bg-white p-6" onSubmit={(event) => { event.preventDefault(); lifecycleMutation.mutate(); }}><h3 id="employee-status-title" className="text-xl font-extrabold">{statusTarget.isActive ? "Inativar funcionário" : "Reativar funcionário"}</h3><div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm"><p className="font-extrabold">{statusTarget.name}</p><p className="text-slate-600">Matrícula {statusTarget.registration}</p><p className="text-slate-600">{statusTarget.company?.tradeName ?? statusTarget.company?.legalName ?? "Empresa não informada"} · {statusTarget.departmentRef?.name ?? statusTarget.department ?? "Sem setor"}</p></div><div className="mt-4 grid gap-3">{statusTarget.isActive ? <label className="text-xs font-bold">Motivo da inativação<select required className="select mt-1" value={statusForm.reason} onChange={(event) => setStatusForm({ ...statusForm, reason: event.target.value })}><option value="TERMINATED_BY_COMPANY">Desligado pela empresa</option><option value="VOLUNTARY_RESIGNATION">Pedido de demissão pelo funcionário</option></select></label> : null}<label className="text-xs font-bold">Data efetiva<input required type="date" max={toBrazilDateInputValue()} className="input mt-1" value={statusForm.effectiveDate} onChange={(event) => setStatusForm({ ...statusForm, effectiveDate: event.target.value, confirmFutureSchedules: false })} /></label><label className="text-xs font-bold">Observação opcional<textarea maxLength={1000} className="input mt-1 min-h-24" value={statusForm.notes} onChange={(event) => setStatusForm({ ...statusForm, notes: event.target.value })} /></label></div>{statusTarget.isActive ? <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-bold">Impactos operacionais</p><p className="mt-1">O acesso vinculado será desativado e novos vínculos posteriores à data efetiva serão bloqueados. Históricos anteriores não serão apagados.</p>{inactivationImpactQuery.isLoading ? <p className="mt-2">Verificando escalas futuras…</p> : null}{inactivationImpactQuery.data ? <p className="mt-2 font-bold">{inactivationImpactQuery.data.impact.futureSchedules} escala(s) futura(s) e {inactivationImpactQuery.data.impact.totalAssignments} atribuição(ões) serão encerradas.</p> : null}{inactivationImpactQuery.data && (inactivationImpactQuery.data.impact.futureSchedules > 0 || inactivationImpactQuery.data.impact.totalAssignments > 0) ? <label className="mt-3 flex items-start gap-2 font-bold"><input required type="checkbox" className="mt-1" checked={statusForm.confirmFutureSchedules} onChange={(event) => setStatusForm({ ...statusForm, confirmFutureSchedules: event.target.checked })} />Confirmo o cancelamento ou encerramento somente das escalas futuras.</label> : null}</div> : <p className="mt-4 rounded-2xl bg-cyan-50 p-4 text-sm text-cyan-900">A reativação preserva o histórico anterior e não restaura automaticamente escalas canceladas.</p>}{inactivationImpactQuery.isError || lifecycleMutation.isError ? <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">{((inactivationImpactQuery.error ?? lifecycleMutation.error) as Error).message}</p> : null}<div className="mt-5 flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setStatusTarget(null)}>Cancelar</button><button className={statusTarget.isActive ? "btn-danger" : "btn-primary"} disabled={lifecycleMutation.isPending || inactivationImpactQuery.isLoading}>{lifecycleMutation.isPending ? "Salvando…" : statusTarget.isActive ? "Confirmar inativação" : "Confirmar reativação"}</button></div></form></div> : null}
     </div>
   );
 }

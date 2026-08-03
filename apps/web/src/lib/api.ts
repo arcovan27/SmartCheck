@@ -52,3 +52,22 @@ export function getUploadedFileUrl(storedPath?: string | null): string | null {
   const pathWithoutRoot = normalizedPath.replace(/^[^/]+\//, "");
   return getApiUrl(`/files/${pathWithoutRoot}`);
 }
+
+export async function downloadProtectedDocument(id: string, filename: string): Promise<void> {
+  const token = localStorage.getItem("smartcheck.token");
+  const response = await fetch(getApiUrl(`/hr/documents/${id}`), {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ message: "Falha ao baixar documento" }));
+    throw new Error(data.message ?? "Falha ao baixar documento");
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}

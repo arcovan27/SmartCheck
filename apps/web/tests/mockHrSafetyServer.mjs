@@ -1,0 +1,43 @@
+import http from "node:http";
+
+const company = { id: "company-demo", legalName: "SmartCheck Demonstração", tradeName: "Unidade Industrial" };
+const units = [{ id: "unit-1", companyId: company.id, name: "Matriz" }];
+const departments = [{ id: "department-1", companyId: company.id, name: "Produção", code: "PROD", isActive: true }, { id: "department-2", companyId: company.id, name: "Qualidade", code: "QUAL", isActive: true }];
+const employees = [{ id: "employee-1", companyId: company.id, unitId: "unit-1", departmentId: "department-1", name: "Ana Martins", registration: "F-0101", isActive: true }, { id: "employee-2", companyId: company.id, unitId: "unit-1", departmentId: "department-1", name: "Bruno Almeida", registration: "F-0108", isActive: true }, { id: "employee-3", companyId: company.id, unitId: "unit-1", departmentId: "department-2", name: "Carla Nogueira", registration: "F-0116", isActive: true }];
+const permissions = ["HR_ACCESS", "HR_DASHBOARD_VIEW", "EPI_VIEW", "EPI_COST_VIEW", "EMPLOYEE_VIEW", "EMPLOYEE_MANAGE", "SCHEDULE_VIEW", "SCHEDULE_MANAGE", "OCCURRENCE_REGISTER", "OCCURRENCE_REVIEW", "CATALOG_MANAGE", "DEPARTMENT_VIEW", "DEPARTMENT_CREATE", "DEPARTMENT_EDIT", "DEPARTMENT_DEACTIVATE", "DEPARTMENT_DELETE"];
+permissions.push("OCCURRENCE_VIEW", "OCCURRENCE_EDIT", "OCCURRENCE_CANCEL", "WARNING_VIEW", "WARNING_REGISTER", "SUSPENSION_VIEW", "SUSPENSION_REGISTER", "WORK_ACCIDENT_VIEW", "WORK_ACCIDENT_REGISTER", "DOCUMENT_VIEW");
+const filters = { companies: [company], units, departments, positions: [{ id: "position-1", companyId: company.id, name: "Operador" }], teams: [{ id: "team-1", companyId: company.id, name: "Equipe Alfa" }], shifts: [{ id: "shift-1", companyId: company.id, name: "Administrativo" }], employees, epiCategories: ["Proteção auditiva", "Proteção respiratória"], absenceReasons: [] };
+const occurrences = { aggregate: { total: 27, totalDays: 39, byType: [{ key: "MEDICAL_CERTIFICATE", value: 8 }, { key: "JUSTIFIED_ABSENCE", value: 6 }, { key: "UNJUSTIFIED_ABSENCE", value: 4 }, { key: "LEAVE", value: 3 }, { key: "VACATION", value: 2 }, { key: "SUSPENSION", value: 1 }, { key: "WORK_ACCIDENT", value: 1 }, { key: "LICENSE", value: 1 }, { key: "OTHER", value: 1 }], evolution: [{ date: "2026-07-03", value: 2 }, { date: "2026-07-08", value: 5 }, { date: "2026-07-14", value: 4 }, { date: "2026-07-21", value: 7 }, { date: "2026-07-28", value: 3 }], byDepartment: [{ name: "Produção", value: 14 }, { name: "Qualidade", value: 7 }, { name: "Logística", value: 4 }, { name: "Administrativo", value: 2 }], byUnit: [{ name: "Matriz", value: 27 }] }, items: [{ id: "occ-1", type: "ATESTADO_MEDICO", startDate: "2026-07-08T03:00:00.000Z", endDate: "2026-07-09T03:00:00.000Z", date: "2026-07-08T03:00:00.000Z", daysAway: 2, status: "APROVADO", departmentNameSnapshot: "Produção", employee: { ...employees[0], department: "Produção", company, unitRef: { name: "Matriz" }, departmentRef: { name: "Produção", deletedAt: null } }, registeredBy: { email: "rh@smartcheck.local" }, dailyAttendances: [{ frequencyType: { code: "ATEST", name: "Atestado", category: "JUSTIFIED_ABSENCE", color: "#0284c7" } }] }, { id: "occ-2", type: "FALTA", startDate: "2026-07-14T03:00:00.000Z", endDate: "2026-07-14T03:00:00.000Z", date: "2026-07-14T03:00:00.000Z", daysAway: 1, status: "PENDENTE", departmentNameSnapshot: "Qualidade", employee: { ...employees[2], department: "Qualidade", company, unitRef: { name: "Matriz" }, departmentRef: { name: "Qualidade", deletedAt: null } }, registeredBy: { email: "lider@smartcheck.local" }, dailyAttendances: [{ frequencyType: { code: "FALTA_INJ", name: "Falta injustificada", category: "UNJUSTIFIED_ABSENCE", color: "#dc2626" } }] }], total: 27, page: 1, pageSize: 20 };
+
+const dashboard = { period: { startDate: "2026-07-01", endDate: "2026-07-30", timeZone: "America/Sao_Paulo", inclusive: true }, employees: { active: 66, admitted: 3, dismissed: 1, away: 4, byDepartment: [{ name: "Produção", value: 38 }, { name: "Qualidade", value: 14 }, { name: "Logística", value: 9 }, { name: "Administrativo", value: 5 }] }, epi: { registered: 42, stockTotal: 1184, lowStock: 3, delivered: 186, returned: 12, substituted: 17, expiring: 4, expired: 1 }, costs: { exactCost: 18420.55, estimatedLegacyCost: 0, previousCost: 17200, variationPercent: 7.1, monthly: [{ month: "2026-07-01T00:00:00.000Z", exactCost: 18420.55, estimatedLegacyCost: 0 }] }, schedules: { activeNow: 61, scheduledInPeriod: 61, hoursPlanned: 10144, upcoming: [{ id: "turn-1", startAt: "2026-07-30T11:00:00.000Z", endAt: "2026-07-30T20:00:00.000Z", employee: { name: "Ana Martins" }, shift: { name: "Administrativo" } }] }, occurrences: { total: 27, justified: 6, notJustified: 4, medicalCertificates: 8, affectedEmployees: 19, absentScheduledHours: 304, absenteeismPercent: 3.0 } };
+const catalogs = { units: units.map((item) => ({ ...item, isActive: true })), departments, positions: [], costCenters: [], teams: [], shifts: [], absenceReasons: [] };
+
+function send(response, value, status = 200) {
+  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "http://127.0.0.1:4179", "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS" });
+  response.end(JSON.stringify(value));
+}
+
+http.createServer((request, response) => {
+  if (request.method === "OPTIONS") return send(response, {}, 204);
+  const url = new URL(request.url ?? "/", "http://127.0.0.1:3334");
+  if (url.pathname === "/auth/login") return send(response, { token: "local-visual-test", user: { id: "user-demo", email: "admin@smartcheck.local", role: "ADMIN", isActive: true, permissions } });
+  if (url.pathname === "/auth/me") return send(response, { id: "user-demo", email: "admin@smartcheck.local", role: "ADMIN", isActive: true, permissions });
+  if (url.pathname === "/company") return send(response, company);
+  if (url.pathname === "/hr/dashboard/filters") return send(response, filters);
+  if (url.pathname === "/hr/dashboard") return send(response, dashboard);
+  if (url.pathname === "/hr/occurrences/indicators") return send(response, occurrences);
+  if (url.pathname === "/hr/occurrences/reasons") return send(response, disciplinaryReasons.filter((reason) => reason.frequencyType.code === url.searchParams.get("frequencyCode")));
+  if (url.pathname === "/hr/employees") return send(response, employeePage);
+  if (url.pathname === "/hr/employees/employee-1") return send(response, employeeDetail);
+  if (url.pathname === "/hr/catalogs") return send(response, catalogs);
+  if (url.pathname === "/hr/catalogs/departments/department-1/deletion-impact") return send(response, { department: departments[0], impact: { activeEmployees: 3, activeTeams: 0, activeAssignments: 0, futureSchedules: 0, employees }, blockers: ["activeEmployees"], canDeleteWithoutTransfer: false });
+  if (url.pathname === "/employees") return send(response, employees.map((employee, index) => ({ ...employee, department: index === 2 ? "Qualidade" : "Produção", position: "Operador", company, unitRef: { name: "Matriz" }, departmentRef: { name: index === 2 ? "Qualidade" : "Produção" }, biometric: null })));
+  if (url.pathname === "/employees/employee-1/inactivation-impact") return send(response, { impact: { futureSchedules: 4, futureAssignments: 0, spanningAssignments: 1, totalAssignments: 1 } });
+  return send(response, { message: "Rota simulada não encontrada" }, 404);
+}).listen(3334, "127.0.0.1");
+
+Object.assign(occurrences.aggregate, { affectedEmployees: 21, warnings: 2, suspensions: 2, suspensionDays: 4, workAccidents: 2, workAccidentsWithLeave: 1, workAccidentsWithoutLeave: 1, workAccidentLeaveDays: 3 });
+occurrences.aggregate.byType.push({ key: "WARNING", value: 2 });
+const employeePage = { items: employees.map((employee) => ({ ...employee, departmentRef: { name: employee.departmentId === "department-2" ? "Qualidade" : "Produção" }, positionRef: { name: "Operador" }, company, unitRef: { name: "Matriz" }, team: { name: "Equipe Alfa" } })), total: 3, page: 1, pageSize: 20, summary: { active: 3, away: 0 } };
+const employeeDetail = { ...employeePage.items[0], epiMovements: [], schedules: [], occurrences: [], capabilities: { canViewEpi: true, canViewSchedules: true, canViewOccurrences: true, canViewDocuments: true } };
+const disciplinaryReasons = [{ id: "reason-1", name: "Descumprimento de procedimento", occurrenceType: "OUTRO", frequencyType: { code: "ADVERT", name: "Advertência" } }, { id: "reason-2", name: "Reincidência disciplinar", occurrenceType: "OUTRO", frequencyType: { code: "SUSP", name: "Suspensão" } }];
