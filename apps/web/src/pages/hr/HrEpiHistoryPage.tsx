@@ -15,6 +15,8 @@ type Movement = {
   departmentSnapshot?: string | null;
   unitCostSnapshot?: string | null;
   isEstimatedCost?: boolean;
+  movementReason?: string | null;
+  notes?: string | null;
   employee: Option;
   epi: Option & { unit: string };
   unit?: Option | null;
@@ -26,7 +28,7 @@ const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "
 
 export function HrEpiHistoryPage() {
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ startDate: "", endDate: "", employeeId: "", departmentId: "", unitId: "", epiId: "" });
+  const [filters, setFilters] = useState({ startDate: "", endDate: "", employeeId: "", departmentId: "", unitId: "", epiId: "", movementType: "" });
   const optionsQuery = useQuery({ queryKey: ["hr-epi-movement-filters"], queryFn: () => apiRequest<Filters>("/hr/epi-movement-filters") });
   const queryString = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), pageSize: "20" });
@@ -47,23 +49,24 @@ export function HrEpiHistoryPage() {
       <EpiSectionTabs />
       <section className="card p-5">
         <SectionHeading title="Histórico de movimentações de EPI" description="Custos preservados na data do lançamento, com registros mais recentes primeiro." />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
           <input className="input" type="date" aria-label="Data inicial" value={filters.startDate} onChange={(event) => setFilter("startDate", event.target.value)} />
           <input className="input" type="date" aria-label="Data final" value={filters.endDate} onChange={(event) => setFilter("endDate", event.target.value)} />
           <FilterSelect label="Todos os funcionários" value={filters.employeeId} options={optionsQuery.data?.employees} onChange={(value) => setFilter("employeeId", value)} />
           <FilterSelect label="Todos os setores" value={filters.departmentId} options={optionsQuery.data?.departments} onChange={(value) => setFilter("departmentId", value)} />
           <FilterSelect label="Todas as unidades" value={filters.unitId} options={optionsQuery.data?.units} onChange={(value) => setFilter("unitId", value)} />
           <FilterSelect label="Todos os EPIs" value={filters.epiId} options={optionsQuery.data?.epis} onChange={(value) => setFilter("epiId", value)} />
+          <select className="select" aria-label="Todos os tipos" value={filters.movementType} onChange={(event) => setFilter("movementType", event.target.value)}><option value="">Todos os tipos</option><option value="ENTREGA">Entrega</option><option value="DEVOLUCAO">Devolução</option><option value="SUBSTITUICAO">Substituição</option></select>
         </div>
 
         {movementsQuery.isError ? <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">Não foi possível carregar o histórico. Tente novamente.</p> : null}
         {movementsQuery.isLoading ? <p className="py-12 text-center text-sm text-slate-500">Carregando histórico…</p> : (
           <div className="mt-5 overflow-x-auto">
             <table className="w-full min-w-[1100px] text-left text-sm">
-              <thead><tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500"><th className="px-3 py-3">Data</th><th className="px-3 py-3">Funcionário</th><th className="px-3 py-3">EPI</th><th className="px-3 py-3">Movimentação</th><th className="px-3 py-3">Quantidade</th>{data?.canViewCosts ? <><th className="px-3 py-3">Valor unitário</th><th className="px-3 py-3">Valor total</th></> : null}<th className="px-3 py-3">Responsável</th><th className="px-3 py-3">Situação</th></tr></thead>
+              <thead><tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500"><th className="px-3 py-3">Data</th><th className="px-3 py-3">Funcionário</th><th className="px-3 py-3">EPI</th><th className="px-3 py-3">Movimentação</th><th className="px-3 py-3">Quantidade</th>{data?.canViewCosts ? <><th className="px-3 py-3">Valor unitário</th><th className="px-3 py-3">Valor total</th></> : null}<th className="px-3 py-3">Responsável</th><th className="px-3 py-3">Observações</th><th className="px-3 py-3">Situação</th></tr></thead>
               <tbody>{data?.items.map((movement) => {
                 const unitCost = movement.unitCostSnapshot === null || movement.unitCostSnapshot === undefined ? null : Number(movement.unitCostSnapshot);
-                return <tr key={movement.id} className="border-b border-slate-100 last:border-0"><td className="px-3 py-4 whitespace-nowrap">{formatBrazilDateTime(movement.date)}</td><td className="px-3 py-4"><p className="font-bold">{movement.employee.name}</p><p className="text-xs text-slate-500">{movement.departmentSnapshot || movement.unit?.name || "—"}</p></td><td className="px-3 py-4"><p className="font-bold">{movement.epi.name}</p><p className="text-xs text-slate-500">CA {movement.epi.ca || "—"}</p></td><td className="px-3 py-4">{movement.movementType}</td><td className="px-3 py-4">{movement.quantity} {movement.epi.unit}</td>{data.canViewCosts ? <><td className="px-3 py-4">{unitCost === null ? "—" : currency.format(unitCost)}{movement.isEstimatedCost ? " (estimado)" : ""}</td><td className="px-3 py-4 font-bold">{unitCost === null ? "—" : currency.format(unitCost * movement.quantity)}</td></> : null}<td className="px-3 py-4">{movement.responsibleUser?.employee?.name ?? movement.responsibleUser?.email ?? "—"}</td><td className="px-3 py-4"><StatusBadge tone="success">Registrada</StatusBadge></td></tr>;
+                return <tr key={movement.id} className="border-b border-slate-100 last:border-0"><td className="px-3 py-4 whitespace-nowrap">{formatBrazilDateTime(movement.date)}</td><td className="px-3 py-4"><p className="font-bold">{movement.employee.name}</p><p className="text-xs text-slate-500">{movement.departmentSnapshot || movement.unit?.name || "—"}</p></td><td className="px-3 py-4"><p className="font-bold">{movement.epi.name}</p><p className="text-xs text-slate-500">CA {movement.epi.ca || "—"}</p></td><td className="px-3 py-4">{movement.movementType}</td><td className="px-3 py-4">{movement.quantity} {movement.epi.unit}</td>{data.canViewCosts ? <><td className="px-3 py-4">{unitCost === null ? "—" : currency.format(unitCost)}{movement.isEstimatedCost ? " (estimado)" : ""}</td><td className="px-3 py-4 font-bold">{unitCost === null ? "—" : currency.format(unitCost * movement.quantity)}</td></> : null}<td className="px-3 py-4">{movement.responsibleUser?.employee?.name ?? movement.responsibleUser?.email ?? "—"}</td><td className="px-3 py-4 max-w-xs text-slate-600">{movement.movementReason || movement.notes || "—"}</td><td className="px-3 py-4"><StatusBadge tone="success">Registrada</StatusBadge></td></tr>;
               })}</tbody>
             </table>
             {data?.items.length === 0 ? <p className="py-12 text-center text-sm text-slate-500">Nenhuma movimentação corresponde aos filtros.</p> : null}

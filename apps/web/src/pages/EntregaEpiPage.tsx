@@ -4,6 +4,7 @@ import { API_URL, apiRequest } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatBrazilDate, formatBrazilDateTime, toBrazilDateInputValue } from "../lib/datetime";
 import { EpiSectionTabs, HrSectionTabs } from "./hr/HrPrototypeComponents";
+import { epiFeaturesQuery } from "../config/epiFeatures";
 
 const defaultPrintTerm =
   "Recebi da Empresa Acima, os EPI's abaixo relacionados, que sao fornecidos gratuitamente nos termos do Art 166 da C.L.T e item 6.2.1.2 da NR-6 da portaria 3.214 de 08/06/78, declaro ainda estar ciente que de acordo com art. 158, Paragrafo unico, letra \"b\" da CLT e item 6.3 da NR-6 da mesma portaria, que devo usar, obrigatoriamente estes EPI's durante toda jornada de trabalho, responsabilizar-me pela sua guarda e conservacao, comunicar ao Dep. De Pessoal, qualquer alteracao que os tornem danificados ou extraviados. Atesto ainda estar orientado e treinado da utilizacao correta destes EPI's abaixo relacionados.";
@@ -35,7 +36,8 @@ export function EntregaEpiPage() {
     notes: "",
     confirmationMethod: "LOGIN",
     confirmationBiometricId: "",
-    employeeSignatureName: ""
+    employeeSignatureName: "",
+    requestId: crypto.randomUUID()
   });
   const [reportEmployeeId, setReportEmployeeId] = useState("");
   const [lastRegisteredDeliveryId, setLastRegisteredDeliveryId] = useState<string | null>(null);
@@ -58,10 +60,7 @@ export function EntregaEpiPage() {
     queryKey: ["epi-deliveries"],
     queryFn: () => apiRequest<any[]>("/epi-deliveries")
   });
-  const featuresQuery = useQuery({
-    queryKey: ["epi-features"],
-    queryFn: () => apiRequest<{ biometricSignatureEnabled: boolean }>("/epi-features")
-  });
+  const featuresQuery = useQuery(epiFeaturesQuery);
   const biometricSignatureEnabled = featuresQuery.data?.biometricSignatureEnabled === true;
 
   const reportQuery = useQuery({
@@ -89,7 +88,8 @@ export function EntregaEpiPage() {
         quantity: 1,
         notes: "",
         confirmationBiometricId: "",
-        employeeSignatureName: prev.employeeSignatureName || selectedEmployee?.name || ""
+        employeeSignatureName: prev.employeeSignatureName || selectedEmployee?.name || "",
+        requestId: crypto.randomUUID()
       }));
     }
   });

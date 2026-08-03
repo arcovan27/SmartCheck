@@ -48,6 +48,8 @@ export async function hrEpiRoutes(app: FastifyInstance) {
         totalCost += cost;
         const scopeName = movement.departmentSnapshot || movement.unit?.name || "Sem setor/unidade";
         byScope.set(scopeName, (byScope.get(scopeName) ?? 0) + cost);
+      }
+      for (const movement of movements) {
         const epi = byEpi.get(movement.epi.id) ?? { name: movement.epi.name, quantity: 0 };
         epi.quantity += movement.quantity;
         byEpi.set(movement.epi.id, epi);
@@ -56,7 +58,7 @@ export async function hrEpiRoutes(app: FastifyInstance) {
         period: { startDate: query.startDate, endDate: query.endDate },
         totalDelivered: deliveryMovements.reduce((sum, item) => sum + item.quantity, 0),
         movementCount: movements.length,
-        employeesReceiving: new Set(deliveryMovements.map((item) => item.employeeId)).size,
+        employeesRelated: new Set(movements.map((item) => item.employeeId)).size,
         totalCost: canViewCosts ? totalCost : null,
         costByScope: canViewCosts ? [...byScope.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8) : [],
         topEpis: [...byEpi.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 8),

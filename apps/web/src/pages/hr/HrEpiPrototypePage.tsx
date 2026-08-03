@@ -10,7 +10,11 @@ type EpiItem = { id: string; name: string; description?: string; ca: string; cat
 type EpiPageData = { items: EpiItem[]; total: number; page: number; pageSize: number; summary: { registered: number; stockTotal: number; lowStock: number }; canViewCosts: boolean };
 type EmployeeOption = { id: string; name: string; registration: string };
 type Movement = { id: string; movementType: string; quantity: number; date: string; movementReason?: string | null; unitCostSnapshot?: string | null; isEstimatedCost: boolean; employee: EmployeeOption; epi: { id: string; name: string; ca: string; unit: string } };
-type EpiDashboard = { totalDelivered: number; movementCount: number; employeesReceiving: number; totalCost: number | null; costByScope: { name: string; value: number }[]; topEpis: { name: string; quantity: number }[]; canViewCosts: boolean };
+type EpiDashboard = { totalDelivered: number; movementCount: number; employeesRelated: number; totalCost: number | null; costByScope: { name: string; value: number }[]; topEpis: { name: string; quantity: number }[]; canViewCosts: boolean };
+
+function emptyMovementForm() {
+  return { employeeId: "", epiId: "", movementType: "ENTREGA", quantity: 1, movementReason: "", requestId: crypto.randomUUID() };
+}
 
 export function HrEpiPrototypePage() {
   const queryClient = useQueryClient();
@@ -22,7 +26,7 @@ export function HrEpiPrototypePage() {
   const [showMovement, setShowMovement] = useState(false);
   const today = toBrazilDateInputValue();
   const [period, setPeriod] = useState({ startDate: `${today.slice(0, 7)}-01`, endDate: today });
-  const [form, setForm] = useState({ employeeId: "", epiId: "", movementType: "ENTREGA", quantity: 1, movementReason: "" });
+  const [form, setForm] = useState(emptyMovementForm);
   const queryString = new URLSearchParams({ page: String(page), pageSize: "10", stockStatus: stockFilter });
   if (search) queryString.set("search", search);
   const episQuery = useQuery({ queryKey: ["hr-epis", page, search, stockFilter], queryFn: () => apiRequest<EpiPageData>(`/hr/epis?${queryString}`) });
@@ -33,11 +37,11 @@ export function HrEpiPrototypePage() {
   const createMovement = useMutation({
     mutationFn: () => {
       const employee = employeesQuery.data?.items.find((item) => item.id === form.employeeId);
-      return apiRequest("/epi-deliveries", { method: "POST", body: JSON.stringify({ ...form, quantity: Number(form.quantity), confirmationMethod: "LOGIN", employeeSignatureName: employee?.name ?? "Confirmação autenticada", employeeConfirmedAt: new Date().toISOString() }) });
+      return apiRequest("/hr/epi-movements", { method: "POST", body: JSON.stringify({ ...form, quantity: Number(form.quantity), confirmationMethod: "LOGIN", employeeSignatureName: employee?.name ?? "Confirmação autenticada", employeeConfirmedAt: new Date().toISOString() }) });
     },
     onSuccess: async () => {
       setShowMovement(false);
-      setForm({ employeeId: "", epiId: "", movementType: "ENTREGA", quantity: 1, movementReason: "" });
+      setForm(emptyMovementForm());
       await Promise.all([queryClient.invalidateQueries({ queryKey: ["hr-epis"] }), queryClient.invalidateQueries({ queryKey: ["hr-epi-movements"] }), queryClient.invalidateQueries({ queryKey: ["hr-dashboard"] })]);
     }
   });
@@ -49,13 +53,13 @@ export function HrEpiPrototypePage() {
     <div className="space-y-5">
       <HrSectionTabs />
       <EpiSectionTabs />
-      <HrPageHeader eyebrow="Recursos Humanos · EPI" title="Proteção, estoque e custo no mesmo fluxo" description="Cadastro, movimentações, fichas individuais e custo histórico dentro do escopo autorizado." action={canManage ? <div className="flex flex-wrap gap-2"><Link className="rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-white/20" to="/recursos-humanos/epi/ficha-entrega">Ficha de entrega</Link><button className="rounded-xl bg-brand-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 hover:bg-brand-300" onClick={() => setShowMovement(true)}>Nova movimentação</button></div> : undefined} />
+      <HrPageHeader eyebrow="Recursos Humanos · EPI" title="Proteção, estoque e custo no mesmo fluxo" description="Cadastro, movimentações, fichas individuais e custo histórico dentro do escopo autorizado." action={canManage ? <button className="rounded-xl bg-brand-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 hover:bg-brand-300" onClick={() => setShowMovement(true)}>Nova movimentação</button> : undefined} />
 
       <section className="card p-5">
         <SectionHeading title="Dashboard de EPI" description="Indicadores calculados diretamente das movimentações do período" action={<div className="flex gap-2"><input className="input" aria-label="Início do período" type="date" value={period.startDate} onChange={(event) => setPeriod({ ...period, startDate: event.target.value })} /><input className="input" aria-label="Fim do período" type="date" value={period.endDate} onChange={(event) => setPeriod({ ...period, endDate: event.target.value })} /></div>} />
         {dashboardQuery.isError ? <p className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">Não foi possível carregar os indicadores do período.</p> : null}
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="EPIs entregues" value={String(dashboardQuery.data?.totalDelivered ?? "—")} detail="Entregas e substituições no período" tone="success" /><MetricCard label="Movimentações" value={String(dashboardQuery.data?.movementCount ?? "—")} detail="Todos os tipos registrados" tone="info" /><MetricCard label="Funcionários atendidos" value={String(dashboardQuery.data?.employeesReceiving ?? "—")} detail="Funcionários distintos no período" />{dashboardQuery.data?.canViewCosts ? <MetricCard label="Custo das entregas" value={dashboardQuery.data.totalCost === null ? "—" : currency.format(dashboardQuery.data.totalCost)} detail="Valor histórico das movimentações" tone="warning" /> : null}</div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-2"><div className="rounded-2xl border border-slate-200 p-4"><h4 className="font-extrabold">EPIs mais entregues</h4><div className="mt-3 space-y-2">{dashboardQuery.data?.topEpis.map((item) => <div key={item.name} className="flex justify-between text-sm"><span>{item.name}</span><strong>{item.quantity}</strong></div>)}{dashboardQuery.data?.topEpis.length === 0 ? <p className="text-sm text-slate-500">Sem entregas no período.</p> : null}</div></div>{dashboardQuery.data?.canViewCosts ? <div className="rounded-2xl border border-slate-200 p-4"><h4 className="font-extrabold">Custo por setor ou unidade</h4><div className="mt-3 space-y-2">{dashboardQuery.data.costByScope.map((item) => <div key={item.name} className="flex justify-between text-sm"><span>{item.name}</span><strong>{currency.format(item.value)}</strong></div>)}{dashboardQuery.data.costByScope.length === 0 ? <p className="text-sm text-slate-500">Sem custos no período.</p> : null}</div></div> : null}</div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="EPIs entregues" value={String(dashboardQuery.data?.totalDelivered ?? "—")} detail="Entregas e substituições no período" tone="success" /><MetricCard label="Movimentações" value={String(dashboardQuery.data?.movementCount ?? "—")} detail="Todos os tipos registrados" tone="info" /><MetricCard label="Funcionários relacionados" value={String(dashboardQuery.data?.employeesRelated ?? "—")} detail="Funcionários distintos nas movimentações" />{dashboardQuery.data?.canViewCosts ? <MetricCard label="Custo das entregas" value={dashboardQuery.data.totalCost === null ? "—" : currency.format(dashboardQuery.data.totalCost)} detail="Valor histórico das movimentações" tone="warning" /> : null}</div>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2"><div className="rounded-2xl border border-slate-200 p-4"><h4 className="font-extrabold">EPIs mais movimentados</h4><div className="mt-3 space-y-2">{dashboardQuery.data?.topEpis.map((item) => <div key={item.name} className="flex justify-between text-sm"><span>{item.name}</span><strong>{item.quantity}</strong></div>)}{dashboardQuery.data?.topEpis.length === 0 ? <p className="text-sm text-slate-500">Sem movimentações no período.</p> : null}</div></div>{dashboardQuery.data?.canViewCosts ? <div className="rounded-2xl border border-slate-200 p-4"><h4 className="font-extrabold">Custo por setor ou unidade</h4><div className="mt-3 space-y-2">{dashboardQuery.data.costByScope.map((item) => <div key={item.name} className="flex justify-between text-sm"><span>{item.name}</span><strong>{currency.format(item.value)}</strong></div>)}{dashboardQuery.data.costByScope.length === 0 ? <p className="text-sm text-slate-500">Sem custos no período.</p> : null}</div></div> : null}</div>
       </section>
 
       {episQuery.isError ? <ErrorState error={episQuery.error as Error} /> : null}

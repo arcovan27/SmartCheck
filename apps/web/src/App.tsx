@@ -8,7 +8,6 @@ import { CompanyPage } from "./pages/CompanyPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DownloadsPage } from "./pages/DownloadsPage";
 import { EmployeesPage } from "./pages/EmployeesPage";
-import { EntregaEpiPage } from "./pages/EntregaEpiPage";
 import { ExecucaoChecklistPage } from "./pages/ExecucaoChecklistPage";
 import { HistoricoChecklistPage } from "./pages/HistoricoChecklistPage";
 import { EpiPage } from "./pages/EpiPage";
@@ -20,6 +19,7 @@ import { HrDashboardPrototypePage } from "./pages/hr/HrDashboardPrototypePage";
 import { HrEmployeesPrototypePage } from "./pages/hr/HrEmployeesPrototypePage";
 import { HrEpiPrototypePage } from "./pages/hr/HrEpiPrototypePage";
 import { HrEpiHistoryPage } from "./pages/hr/HrEpiHistoryPage";
+import { HrEpiDeliveryRoute } from "./pages/hr/HrEpiDeliveryRoute";
 import { HrSchedulePrototypePage } from "./pages/hr/HrSchedulePrototypePage";
 import { HrSchedulePage } from "./pages/hr/HrSchedulePage";
 import { HrOccurrenceIndicatorsPage } from "./pages/hr/HrOccurrenceIndicatorsPage";
@@ -55,7 +55,7 @@ export default function App() {
             <Route path="recursos-humanos" element={<PermissionRoute permission="HR_DASHBOARD_VIEW"><HrDashboardPrototypePage /></PermissionRoute>} />
             <Route path="recursos-humanos/indicadores-ocorrencias" element={<PermissionRoute permission="OCCURRENCE_VIEW"><HrOccurrenceIndicatorsPage /></PermissionRoute>} />
             <Route path="recursos-humanos/epi" element={<PermissionRoute permission="EPI_VIEW"><HrEpiPrototypePage /></PermissionRoute>} />
-            <Route path="recursos-humanos/epi/ficha-entrega" element={<PermissionRoute permission="EPI_MANAGE"><EntregaEpiPage /></PermissionRoute>} />
+            <Route path="recursos-humanos/epi/ficha-entrega" element={<PermissionRoute permission="EPI_MANAGE"><HrEpiDeliveryRoute /></PermissionRoute>} />
             <Route path="recursos-humanos/epi/movimentacoes" element={<PermissionRoute permission="EPI_VIEW"><HrEpiPrototypePage /></PermissionRoute>} />
             <Route path="recursos-humanos/epi/historico" element={<PermissionRoute permission="EPI_VIEW"><HrEpiHistoryPage /></PermissionRoute>} />
             <Route path="recursos-humanos/funcionarios" element={<PermissionRoute permission="EMPLOYEE_VIEW"><HrEmployeesPrototypePage /></PermissionRoute>} />

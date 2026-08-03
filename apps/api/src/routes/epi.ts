@@ -1,13 +1,15 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ConfirmationMethod, EpiMovementType, HrPermission, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { writeAudit } from "../services/audit.js";
 import { snapshotEpiCost } from "../services/epiCosts.js";
 import { epiFeatures } from "../config/epiFeatures.js";
-import { biometricSignatureDisabledResponse } from "../services/epiFeatureGuards.js";
+import { biometricSignatureDisabledResponse, requireDeliveryFormEnabled } from "../services/epiFeatureGuards.js";
 import { assertCompanyAccess, assertUnitAccess, publicUserSelect, requireHrPermission, resolveHrDataScope, unitScopeFilter } from "../services/hrAccess.js";
 import { assertOrganizationReferences } from "../services/hrOrganization.js";
+
+const epiMovementRequests = new Map<string, Promise<any>>();
 
 function parseDeliveryDate(value?: string | Date) {
   if (!value) return new Date();
@@ -40,6 +42,7 @@ function parseDeliveryDate(value?: string | Date) {
 
 export async function epiRoutes(app: FastifyInstance) {
   app.get("/epi-features", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_VIEW)] }, async () => ({
+    deliveryFormEnabled: epiFeatures.deliveryFormEnabled,
     biometricSignatureEnabled: epiFeatures.biometricSignatureEnabled
   }));
 
@@ -227,7 +230,7 @@ export async function epiRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/epi-deliveries", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_MANAGE)] }, async (request, reply) => {
+  const createEpiMovement = async (request: FastifyRequest, reply: FastifyReply) => {
     const body = z
       .object({
         employeeId: z.string().cuid(),
@@ -240,8 +243,9 @@ export async function epiRoutes(app: FastifyInstance) {
         confirmationBiometricId: z.string().optional().nullable(),
         employeeSignatureName: z.string().min(2),
         employeeConfirmedAt: z.coerce.date().optional().nullable(),
-        attachmentIds: z.array(z.string().cuid()).optional()
-        ,movementReason: z.string().max(500).optional().nullable()
+        attachmentIds: z.array(z.string().cuid()).optional(),
+        requestId: z.string().uuid().optional(),
+        movementReason: z.string().max(500).optional().nullable()
       })
       .parse(request.body);
     const scope = await resolveHrDataScope(request);
@@ -256,7 +260,7 @@ export async function epiRoutes(app: FastifyInstance) {
         .send({ message: "confirmationBiometricId é obrigatório quando confirmação for por biometria" });
     }
 
-    const delivery = await prisma.$transaction(async (tx) => {
+    const createDelivery = () => prisma.$transaction(async (tx) => {
       const employee = await tx.employee.findFirst({ where: { id: body.employeeId, companyId: { in: scope.companyIds } } });
       const epi = await tx.epi.findFirst({ where: { id: body.epiId, companyId: { in: scope.companyIds } } });
       if (!employee || !epi || !employee.companyId || employee.companyId !== epi.companyId) throw new Error("Funcionario e EPI devem pertencer a mesma empresa autorizada");
@@ -310,8 +314,24 @@ export async function epiRoutes(app: FastifyInstance) {
       return created;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-    return reply.code(201).send(delivery);
-  });
+    const requestKey = body.requestId ? `${request.user.id}:${body.requestId}` : null;
+    const existingRequest = requestKey ? epiMovementRequests.get(requestKey) : undefined;
+    if (existingRequest) return reply.code(201).send(await existingRequest);
+
+    const pendingDelivery = createDelivery();
+    if (requestKey) epiMovementRequests.set(requestKey, pendingDelivery);
+    try {
+      const delivery = await pendingDelivery;
+      if (requestKey) setTimeout(() => epiMovementRequests.delete(requestKey), 5 * 60_000).unref();
+      return reply.code(201).send(delivery);
+    } catch (error) {
+      if (requestKey) epiMovementRequests.delete(requestKey);
+      throw error;
+    }
+  };
+
+  app.post("/epi-deliveries", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_MANAGE), requireDeliveryFormEnabled] }, createEpiMovement);
+  app.post("/hr/epi-movements", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_MANAGE)] }, createEpiMovement);
 
   app.get(
     "/reports/epi-by-employee/:employeeId",
