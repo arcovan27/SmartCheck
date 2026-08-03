@@ -75,6 +75,7 @@ test("middleware bloqueia novas fichas com resposta controlada", async () => {
     await requireDeliveryFormEnabled({} as never, reply as never);
     assert.equal(statusCode, 503);
     assert.deepEqual(payload, deliveryFormDisabledResponse);
+    assert.equal(deliveryFormDisabledResponse.message, "A entrega de EPI está temporariamente indisponível.");
   } finally {
     if (previous === undefined) delete process.env.EPI_DELIVERY_FORM_ENABLED;
     else process.env.EPI_DELIVERY_FORM_ENABLED = previous;

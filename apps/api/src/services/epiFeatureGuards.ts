@@ -8,7 +8,7 @@ export const biometricSignatureDisabledResponse = {
 
 export const deliveryFormDisabledResponse = {
   code: "EPI_DELIVERY_FORM_DISABLED",
-  message: "A Ficha de entrega de EPI está temporariamente indisponível."
+  message: "A entrega de EPI está temporariamente indisponível."
 } as const;
 
 export async function requireDeliveryFormEnabled(_request: FastifyRequest, reply: FastifyReply) {

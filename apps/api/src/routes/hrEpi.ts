@@ -58,7 +58,7 @@ export async function hrEpiRoutes(app: FastifyInstance) {
         period: { startDate: query.startDate, endDate: query.endDate },
         totalDelivered: deliveryMovements.reduce((sum, item) => sum + item.quantity, 0),
         movementCount: movements.length,
-        employeesRelated: new Set(movements.map((item) => item.employeeId)).size,
+        employeesRelated: new Set(deliveryMovements.map((item) => item.employeeId)).size,
         totalCost: canViewCosts ? totalCost : null,
         costByScope: canViewCosts ? [...byScope.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8) : [],
         topEpis: [...byEpi.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 8),

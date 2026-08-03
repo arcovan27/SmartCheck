@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL, apiRequest } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatBrazilDate, formatBrazilDateTime, toBrazilDateInputValue } from "../lib/datetime";
-import { EpiSectionTabs, HrSectionTabs } from "./hr/HrPrototypeComponents";
+import { HrSectionTabs } from "./hr/HrPrototypeComponents";
 import { epiFeaturesQuery } from "../config/epiFeatures";
 
 const defaultPrintTerm =
@@ -342,7 +342,6 @@ export function EntregaEpiPage() {
   return (
     <div className="space-y-4">
       <HrSectionTabs />
-      <EpiSectionTabs />
       <form onSubmit={submitMovement} className="card space-y-2">
         <h2 className="section-title">Ficha de entrega de EPI</h2>
         <select

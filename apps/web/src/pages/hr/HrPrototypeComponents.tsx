@@ -1,7 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { epiFeaturesQuery } from "../../config/epiFeatures";
 
 export function HrPageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
   return (
@@ -80,34 +78,6 @@ export function HrSectionTabs() {
         );
       })}
     </nav>
-  );
-}
-
-export function EpiSectionTabs() {
-  const location = useLocation();
-  const featuresQuery = useQuery(epiFeaturesQuery);
-  const [unavailableMessage, setUnavailableMessage] = useState("");
-  const deliveryFormEnabled = featuresQuery.data?.deliveryFormEnabled === true;
-  const tabs = [
-    { to: "/recursos-humanos/epi", label: "Dashboard de EPI" },
-    { to: "/recursos-humanos/epi/ficha-entrega", label: "Ficha de entrega", deliveryForm: true },
-    { to: "/recursos-humanos/epi/movimentacoes", label: "Movimentações" },
-    { to: "/recursos-humanos/epi/historico", label: "Histórico" }
-  ];
-  return (
-    <div>
-      <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Seções de EPI">
-        {tabs.map((tab) => {
-          const active = location.pathname === tab.to;
-          const className = `whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition ${active ? "bg-brand-700 text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-800"}`;
-          if (tab.deliveryForm && !deliveryFormEnabled) {
-            return <button key={tab.to} type="button" aria-disabled="true" className={`${className} cursor-not-allowed opacity-70`} onClick={() => setUnavailableMessage("A Ficha de entrega de EPI está temporariamente indisponível.")}><span>{tab.label}</span><span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase text-amber-800">Temporariamente indisponível</span></button>;
-          }
-          return <Link key={tab.to} to={tab.to} className={className}>{tab.label}</Link>;
-        })}
-      </nav>
-      {unavailableMessage ? <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900" role="status">{unavailableMessage}</p> : null}
-    </div>
   );
 }
 

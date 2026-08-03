@@ -18,7 +18,6 @@ import { HrCatalogsPrototypePage } from "./pages/hr/HrCatalogsPrototypePage";
 import { HrDashboardPrototypePage } from "./pages/hr/HrDashboardPrototypePage";
 import { HrEmployeesPrototypePage } from "./pages/hr/HrEmployeesPrototypePage";
 import { HrEpiPrototypePage } from "./pages/hr/HrEpiPrototypePage";
-import { HrEpiHistoryPage } from "./pages/hr/HrEpiHistoryPage";
 import { HrEpiDeliveryRoute } from "./pages/hr/HrEpiDeliveryRoute";
 import { HrSchedulePrototypePage } from "./pages/hr/HrSchedulePrototypePage";
 import { HrSchedulePage } from "./pages/hr/HrSchedulePage";
@@ -56,8 +55,8 @@ export default function App() {
             <Route path="recursos-humanos/indicadores-ocorrencias" element={<PermissionRoute permission="OCCURRENCE_VIEW"><HrOccurrenceIndicatorsPage /></PermissionRoute>} />
             <Route path="recursos-humanos/epi" element={<PermissionRoute permission="EPI_VIEW"><HrEpiPrototypePage /></PermissionRoute>} />
             <Route path="recursos-humanos/epi/ficha-entrega" element={<PermissionRoute permission="EPI_MANAGE"><HrEpiDeliveryRoute /></PermissionRoute>} />
-            <Route path="recursos-humanos/epi/movimentacoes" element={<PermissionRoute permission="EPI_VIEW"><HrEpiPrototypePage /></PermissionRoute>} />
-            <Route path="recursos-humanos/epi/historico" element={<PermissionRoute permission="EPI_VIEW"><HrEpiHistoryPage /></PermissionRoute>} />
+            <Route path="recursos-humanos/epi/movimentacoes" element={<PermissionRoute permission="EPI_VIEW"><Navigate to="/recursos-humanos/epi#movimentacoes" replace /></PermissionRoute>} />
+            <Route path="recursos-humanos/epi/historico" element={<PermissionRoute permission="EPI_VIEW"><Navigate to="/recursos-humanos/epi#historico" replace /></PermissionRoute>} />
             <Route path="recursos-humanos/funcionarios" element={<PermissionRoute permission="EMPLOYEE_VIEW"><HrEmployeesPrototypePage /></PermissionRoute>} />
             <Route path="recursos-humanos/escalas" element={hrFeatures.workScheduleEnabled ? <PermissionRoute permission="SCHEDULE_VIEW"><HrSchedulePage /></PermissionRoute> : <HrWorkScheduleUnavailablePage />} />
             <Route path="recursos-humanos/cadastros" element={<PermissionRoute permission="DEPARTMENT_VIEW"><HrCatalogsPrototypePage /></PermissionRoute>} />
