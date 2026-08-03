@@ -1,8 +1,10 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL, apiRequest } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatBrazilDate, formatBrazilDateTime, toBrazilDateInputValue } from "../lib/datetime";
+import { HrSectionTabs } from "./hr/HrPrototypeComponents";
+import { epiFeaturesQuery } from "../config/epiFeatures";
 
 const defaultPrintTerm =
   "Recebi da Empresa Acima, os EPI's abaixo relacionados, que sao fornecidos gratuitamente nos termos do Art 166 da C.L.T e item 6.2.1.2 da NR-6 da portaria 3.214 de 08/06/78, declaro ainda estar ciente que de acordo com art. 158, Paragrafo unico, letra \"b\" da CLT e item 6.3 da NR-6 da mesma portaria, que devo usar, obrigatoriamente estes EPI's durante toda jornada de trabalho, responsabilizar-me pela sua guarda e conservacao, comunicar ao Dep. De Pessoal, qualquer alteracao que os tornem danificados ou extraviados. Atesto ainda estar orientado e treinado da utilizacao correta destes EPI's abaixo relacionados.";
@@ -19,8 +21,10 @@ function escapeHtml(value: string) {
 export function EntregaEpiPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const submissionLockRef = useRef(false);
   const biometricAgentUrl = import.meta.env.VITE_BIOMETRIC_AGENT_URL ?? "http://127.0.0.1:4100";
   const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState(false);
   const [isReadingFingerprint, setIsReadingFingerprint] = useState(false);
   const [printTerm, setPrintTerm] = useState(defaultPrintTerm);
   const [deliveryForm, setDeliveryForm] = useState({
@@ -30,9 +34,10 @@ export function EntregaEpiPage() {
     quantity: 1,
     date: toBrazilDateInputValue(),
     notes: "",
-    confirmationMethod: "BIOMETRIA",
+    confirmationMethod: "LOGIN",
     confirmationBiometricId: "",
-    employeeSignatureName: ""
+    employeeSignatureName: "",
+    requestId: crypto.randomUUID()
   });
   const [reportEmployeeId, setReportEmployeeId] = useState("");
   const [lastRegisteredDeliveryId, setLastRegisteredDeliveryId] = useState<string | null>(null);
@@ -55,6 +60,8 @@ export function EntregaEpiPage() {
     queryKey: ["epi-deliveries"],
     queryFn: () => apiRequest<any[]>("/epi-deliveries")
   });
+  const featuresQuery = useQuery(epiFeaturesQuery);
+  const biometricSignatureEnabled = featuresQuery.data?.biometricSignatureEnabled === true;
 
   const reportQuery = useQuery({
     queryKey: ["epi-report", reportEmployeeId],
@@ -71,6 +78,7 @@ export function EntregaEpiPage() {
     mutationFn: (payload: any) =>
       apiRequest("/epi-deliveries", { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: () => {
+      setActionError(false);
       setActionMessage("Movimentacao registrada com sucesso.");
       queryClient.invalidateQueries({ queryKey: ["epi-deliveries"] });
       queryClient.invalidateQueries({ queryKey: ["epis"] });
@@ -80,7 +88,8 @@ export function EntregaEpiPage() {
         quantity: 1,
         notes: "",
         confirmationBiometricId: "",
-        employeeSignatureName: prev.employeeSignatureName || selectedEmployee?.name || ""
+        employeeSignatureName: prev.employeeSignatureName || selectedEmployee?.name || "",
+        requestId: crypto.randomUUID()
       }));
     }
   });
@@ -130,18 +139,38 @@ export function EntregaEpiPage() {
 
   async function submitMovement(event: FormEvent) {
     event.preventDefault();
+    if (submissionLockRef.current || createMovement.isPending || isReadingFingerprint) return;
+    submissionLockRef.current = true;
+    setActionError(false);
     setActionMessage("");
 
     try {
+      if (!featuresQuery.data) {
+        throw new Error("Não foi possível verificar a configuração da biometria. Tente novamente.");
+      }
       let confirmationBiometricId: string | null = null;
       let responsibleBiometricId: string | null = null;
 
       if (!deliveryForm.employeeId) {
-        throw new Error("Selecione o funcionario para validar a biometria.");
+        throw new Error("Selecione o funcionário.");
       }
-      if (!user?.employee?.id) {
+      const responsibleEmployeeId = user?.employee?.id;
+      if (biometricSignatureEnabled && !responsibleEmployeeId) {
         throw new Error("Usuario logado sem vinculo com funcionario. Nao foi possivel validar biometria do responsavel.");
       }
+
+      if (!biometricSignatureEnabled) {
+        const createdMovement = (await createMovement.mutateAsync({
+          ...deliveryForm,
+          confirmationMethod: "LOGIN",
+          quantity: Number(deliveryForm.quantity),
+          employeeSignatureName: deliveryForm.employeeSignatureName || selectedEmployee?.name,
+          confirmationBiometricId: null
+        })) as any;
+        setLastRegisteredDeliveryId(createdMovement?.id ?? null);
+        return;
+      }
+      if (!responsibleEmployeeId) throw new Error("Responsável pela entrega não identificado.");
 
       setIsReadingFingerprint(true);
       setActionMessage("Aguardando digital do funcionario que esta retirando o EPI...");
@@ -157,8 +186,8 @@ export function EntregaEpiPage() {
       }
 
       setActionMessage("Agora confirme com a digital do responsavel pela entrega...");
-      const identifyResponsibleResult = await identifyEmployeeWithAgent(user.employee.id);
-      if (!identifyResponsibleResult.employeeId || identifyResponsibleResult.employeeId !== user.employee.id) {
+      const identifyResponsibleResult = await identifyEmployeeWithAgent(responsibleEmployeeId);
+      if (!identifyResponsibleResult.employeeId || identifyResponsibleResult.employeeId !== responsibleEmployeeId) {
         throw new Error("A digital lida nao pertence ao responsavel logado.");
       }
       responsibleBiometricId =
@@ -187,7 +216,10 @@ export function EntregaEpiPage() {
       setLastRegisteredDeliveryId(createdMovement?.id ?? null);
     } catch (error) {
       setIsReadingFingerprint(false);
+      setActionError(true);
       setActionMessage((error as Error).message);
+    } finally {
+      submissionLockRef.current = false;
     }
   }
 
@@ -279,16 +311,24 @@ export function EntregaEpiPage() {
             </tbody>
           </table>
           <div class="sign">
-            <div class="stamp">
-              <strong>Assinatura do funcionario (biometria)</strong>
-              Nome: ${escapeHtml(employee.name ?? "-")}<br/>
-              ID biometria: ${escapeHtml(employeeBioId)}
-            </div>
-            <div class="stamp">
-              <strong>Assinatura do responsavel (biometria)</strong>
-              Usuario responsavel: ${escapeHtml(responsibleLabel)}<br/>
-              ID biometria: ${escapeHtml(responsibleBioId)}
-            </div>
+            ${targetDelivery.confirmationMethod === "BIOMETRIA" ? `
+              <div class="stamp">
+                <strong>Assinatura do funcionario (biometria)</strong>
+                Nome: ${escapeHtml(employee.name ?? "-")}<br/>
+                ID biometria: ${escapeHtml(employeeBioId)}
+              </div>
+              <div class="stamp">
+                <strong>Assinatura do responsavel (biometria)</strong>
+                Usuario responsavel: ${escapeHtml(responsibleLabel)}<br/>
+                ID biometria: ${escapeHtml(responsibleBioId)}
+              </div>
+            ` : `
+              <div class="stamp">
+                <strong>Confirmação autenticada</strong>
+                Funcionário: ${escapeHtml(employee.name ?? "-")}<br/>
+                Usuário responsável: ${escapeHtml(responsibleLabel)}
+              </div>
+            `}
           </div>
           <script>
             window.onload = function() { window.print(); };
@@ -301,6 +341,7 @@ export function EntregaEpiPage() {
 
   return (
     <div className="space-y-4">
+      <HrSectionTabs />
       <form onSubmit={submitMovement} className="card space-y-2">
         <h2 className="section-title">Ficha de entrega de EPI</h2>
         <select
@@ -371,16 +412,10 @@ export function EntregaEpiPage() {
           onChange={(e) => setDeliveryForm({ ...deliveryForm, date: e.target.value })}
           required
         />
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-900">
-          Assinatura obrigatoria por biometria para funcionario e responsavel pela entrega.
+        <div className={`rounded-xl border p-2 text-sm ${biometricSignatureEnabled ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+          {biometricSignatureEnabled ? "Assinatura obrigatória por biometria para funcionário e responsável pela entrega." : "Assinatura biométrica temporariamente indisponível"}
         </div>
-        <input
-          className="input"
-          placeholder="ID biometrico do funcionario (automatico)"
-          value={deliveryForm.confirmationBiometricId}
-          readOnly
-          disabled
-        />
+        {biometricSignatureEnabled ? <input className="input" placeholder="ID biométrico do funcionário (automático)" value={deliveryForm.confirmationBiometricId} readOnly disabled /> : null}
         <input
           className="input"
           placeholder="Confirmacao do funcionario (nome)"
@@ -395,7 +430,7 @@ export function EntregaEpiPage() {
           value={deliveryForm.notes}
           onChange={(e) => setDeliveryForm({ ...deliveryForm, notes: e.target.value })}
         />
-        <button className="btn-primary w-full" disabled={createMovement.isPending || isReadingFingerprint}>
+        <button className="btn-primary w-full" disabled={featuresQuery.isLoading || createMovement.isPending || isReadingFingerprint}>
           {isReadingFingerprint
             ? "Lendo digital..."
             : createMovement.isPending
@@ -403,7 +438,7 @@ export function EntregaEpiPage() {
               : "Registrar na ficha de EPI"}
         </button>
         {actionMessage && (
-          <p className={`text-sm ${createMovement.isError ? "text-red-700" : "text-emerald-700"}`}>
+          <p className={`text-sm ${actionError || createMovement.isError ? "text-red-700" : "text-emerald-700"}`}>
             {actionMessage}
           </p>
         )}

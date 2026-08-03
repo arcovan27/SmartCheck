@@ -63,8 +63,8 @@ test("cards de ocorrencias filtram a lista e preservam a URL", () => {
 });
 
 test("Escala fica fora da navegacao e a rota direta mostra indisponibilidade", () => {
-  assert.match(layout, /!hrFeatures\.workScheduleEnabled/);
-  assert.match(hrComponents, /hrFeatures\.workScheduleEnabled/);
+  assert.doesNotMatch(layout, /Escala de trabalho/);
+  assert.doesNotMatch(hrComponents, /recursos-humanos\/escalas/);
   assert.match(app, /HrWorkScheduleUnavailablePage/);
   assert.match(app, /hrFeatures\.workScheduleEnabled \?/);
 });

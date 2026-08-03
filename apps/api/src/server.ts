@@ -28,6 +28,7 @@ import { hrWorkforceAttendanceRoutes } from "./routes/hrWorkforceAttendance.js";
 import { hrWorkforceCatalogRoutes } from "./routes/hrWorkforceCatalogs.js";
 import { hrWorkforceImportRoutes } from "./routes/hrWorkforceImports.js";
 import { hrWorkforcePlanningRoutes } from "./routes/hrWorkforcePlanning.js";
+import { quoteRoutes } from "./routes/quotes.js";
 
 const app = Fastify({ logger: true });
 
@@ -83,6 +84,7 @@ await app.register(checklistRoutes);
 await app.register(maintenanceRoutes);
 await app.register(uploadRoutes);
 await app.register(biometricRoutes);
+await app.register(quoteRoutes);
 
 app.setErrorHandler((error: any, request, reply) => {
   if (error.validation) {

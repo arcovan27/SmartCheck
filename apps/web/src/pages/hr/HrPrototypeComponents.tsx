@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { hrFeatures } from "../../config/hrFeatures";
 
 export function HrPageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
   return (
@@ -66,7 +65,6 @@ export function HrSectionTabs() {
     { to: "/recursos-humanos/epi", label: "EPI" },
     { to: "/recursos-humanos/funcionarios", label: "Funcionários" },
     { to: "/recursos-humanos/indicadores-ocorrencias", label: "Ocorrências" },
-    ...(hrFeatures.workScheduleEnabled ? [{ to: "/recursos-humanos/escalas", label: "Escala" }] : []),
     { to: "/recursos-humanos/cadastros", label: "Cadastro" }
   ];
   return (

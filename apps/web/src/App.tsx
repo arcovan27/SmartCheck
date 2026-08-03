@@ -8,7 +8,6 @@ import { CompanyPage } from "./pages/CompanyPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DownloadsPage } from "./pages/DownloadsPage";
 import { EmployeesPage } from "./pages/EmployeesPage";
-import { EntregaEpiPage } from "./pages/EntregaEpiPage";
 import { ExecucaoChecklistPage } from "./pages/ExecucaoChecklistPage";
 import { HistoricoChecklistPage } from "./pages/HistoricoChecklistPage";
 import { EpiPage } from "./pages/EpiPage";
@@ -19,11 +18,13 @@ import { HrCatalogsPrototypePage } from "./pages/hr/HrCatalogsPrototypePage";
 import { HrDashboardPrototypePage } from "./pages/hr/HrDashboardPrototypePage";
 import { HrEmployeesPrototypePage } from "./pages/hr/HrEmployeesPrototypePage";
 import { HrEpiPrototypePage } from "./pages/hr/HrEpiPrototypePage";
+import { HrEpiDeliveryRoute } from "./pages/hr/HrEpiDeliveryRoute";
 import { HrSchedulePrototypePage } from "./pages/hr/HrSchedulePrototypePage";
 import { HrSchedulePage } from "./pages/hr/HrSchedulePage";
 import { HrOccurrenceIndicatorsPage } from "./pages/hr/HrOccurrenceIndicatorsPage";
 import { hrFeatures } from "./config/hrFeatures";
 import { HrWorkScheduleUnavailablePage } from "./pages/hr/HrModuleUnavailablePage";
+import { QuotesPage } from "./pages/QuotesPage";
 
 export default function App() {
   return (
@@ -41,7 +42,7 @@ export default function App() {
             }
           >
             <Route index element={<DashboardPage />} />
-            <Route path="entrega-epi" element={<PermissionRoute permission="EPI_MANAGE"><EntregaEpiPage /></PermissionRoute>} />
+            <Route path="entrega-epi" element={<PermissionRoute permission="EPI_MANAGE"><Navigate to="/recursos-humanos/epi/ficha-entrega" replace /></PermissionRoute>} />
             <Route path="execucao-checklist" element={<ExecucaoChecklistPage />} />
             <Route path="historico-checklist" element={<HistoricoChecklistPage />} />
             <Route path="downloads" element={<DownloadsPage />} />
@@ -51,9 +52,13 @@ export default function App() {
             <Route path="equipamentos" element={<EquipmentsPage />} />
             <Route path="checklists" element={<ChecklistsPage />} />
             <Route path="manutencao" element={<MaintenancePage />} />
+            <Route path="orcamentos" element={<PermissionRoute permission="QUOTE_VIEW"><QuotesPage /></PermissionRoute>} />
             <Route path="recursos-humanos" element={<PermissionRoute permission="HR_DASHBOARD_VIEW"><HrDashboardPrototypePage /></PermissionRoute>} />
             <Route path="recursos-humanos/indicadores-ocorrencias" element={<PermissionRoute permission="OCCURRENCE_VIEW"><HrOccurrenceIndicatorsPage /></PermissionRoute>} />
             <Route path="recursos-humanos/epi" element={<PermissionRoute permission="EPI_VIEW"><HrEpiPrototypePage /></PermissionRoute>} />
+            <Route path="recursos-humanos/epi/ficha-entrega" element={<PermissionRoute permission="EPI_MANAGE"><HrEpiDeliveryRoute /></PermissionRoute>} />
+            <Route path="recursos-humanos/epi/movimentacoes" element={<PermissionRoute permission="EPI_VIEW"><Navigate to="/recursos-humanos/epi#movimentacoes" replace /></PermissionRoute>} />
+            <Route path="recursos-humanos/epi/historico" element={<PermissionRoute permission="EPI_VIEW"><Navigate to="/recursos-humanos/epi#historico" replace /></PermissionRoute>} />
             <Route path="recursos-humanos/funcionarios" element={<PermissionRoute permission="EMPLOYEE_VIEW"><HrEmployeesPrototypePage /></PermissionRoute>} />
             <Route path="recursos-humanos/escalas" element={hrFeatures.workScheduleEnabled ? <PermissionRoute permission="SCHEDULE_VIEW"><HrSchedulePage /></PermissionRoute> : <HrWorkScheduleUnavailablePage />} />
             <Route path="recursos-humanos/cadastros" element={<PermissionRoute permission="DEPARTMENT_VIEW"><HrCatalogsPrototypePage /></PermissionRoute>} />

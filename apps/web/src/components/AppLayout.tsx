@@ -4,11 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth, userHasPermission } from "../lib/auth";
 import { apiRequest } from "../lib/api";
 import { roleLabels } from "../lib/constants";
-import { hrFeatures } from "../config/hrFeatures";
 
 const dashboardMenu = [
   { to: "/", label: "Dashboard" },
-  { to: "/entrega-epi", label: "Entrega de EPI", permission: "EPI_MANAGE" },
+  { to: "/orcamentos", label: "Orçamentos", permission: "QUOTE_VIEW" },
   { to: "/execucao-checklist", label: "Execucao de Checklist" },
   { to: "/historico-checklist", label: "Historico de Checklist" },
   { to: "/downloads", label: "Downloads" }
@@ -28,7 +27,6 @@ const recursosHumanosMenu = [
   { to: "/recursos-humanos/epi", label: "EPI" },
   { to: "/recursos-humanos/funcionarios", label: "Funcionarios" },
   { to: "/recursos-humanos/indicadores-ocorrencias", label: "Ocorrencias" },
-  { to: "/recursos-humanos/escalas", label: "Escala de trabalho" },
   { to: "/recursos-humanos/cadastros", label: "Cadastro" }
 ];
 
@@ -47,7 +45,7 @@ export function AppLayout() {
         { to: "/execucao-checklist", label: "Execucao de Checklist" },
         { to: "/historico-checklist", label: "Historico de Checklist" }
       ]
-    : dashboardMenu.filter((item) => !item.permission || userHasPermission(user, item.permission));
+    : dashboardMenu.filter((item) => !("permission" in item) || !item.permission || userHasPermission(user, item.permission));
   const visibleCadastroMenu =
     (user?.role === "ADMIN" ? cadastroMenu : cadastroMenu.filter((item) => item.to !== "/checklists"))
       .filter((item) => !("permission" in item) || !item.permission || userHasPermission(user, item.permission));
@@ -57,10 +55,8 @@ export function AppLayout() {
       "/recursos-humanos/epi": "EPI_VIEW",
       "/recursos-humanos/funcionarios": "EMPLOYEE_VIEW",
       "/recursos-humanos/indicadores-ocorrencias": "OCCURRENCE_VIEW",
-      "/recursos-humanos/escalas": "SCHEDULE_VIEW",
       "/recursos-humanos/cadastros": "CATALOG_MANAGE"
     };
-    if (item.to === "/recursos-humanos/escalas" && !hrFeatures.workScheduleEnabled) return false;
     if (item.to === "/recursos-humanos/cadastros") return userHasPermission(user, "CATALOG_MANAGE") || userHasPermission(user, "DEPARTMENT_VIEW");
     return userHasPermission(user, permissionByRoute[item.to]);
   });
