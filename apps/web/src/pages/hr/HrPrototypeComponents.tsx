@@ -83,6 +83,24 @@ export function HrSectionTabs() {
   );
 }
 
+export function EpiSectionTabs() {
+  const location = useLocation();
+  const tabs = [
+    { to: "/recursos-humanos/epi", label: "Dashboard de EPI" },
+    { to: "/recursos-humanos/epi/ficha-entrega", label: "Ficha de entrega" },
+    { to: "/recursos-humanos/epi/movimentacoes", label: "Movimentações" },
+    { to: "/recursos-humanos/epi/historico", label: "Histórico" }
+  ];
+  return (
+    <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Seções de EPI">
+      {tabs.map((tab) => {
+        const active = location.pathname === tab.to;
+        return <Link key={tab.to} to={tab.to} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition ${active ? "bg-brand-700 text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-800"}`}>{tab.label}</Link>;
+      })}
+    </nav>
+  );
+}
+
 export function MiniAvatar({ initials }: { initials: string }) {
   return <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-extrabold text-white">{initials}</span>;
 }

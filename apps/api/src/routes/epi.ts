@@ -4,6 +4,8 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { writeAudit } from "../services/audit.js";
 import { snapshotEpiCost } from "../services/epiCosts.js";
+import { epiFeatures } from "../config/epiFeatures.js";
+import { biometricSignatureDisabledResponse } from "../services/epiFeatureGuards.js";
 import { assertCompanyAccess, assertUnitAccess, publicUserSelect, requireHrPermission, resolveHrDataScope, unitScopeFilter } from "../services/hrAccess.js";
 import { assertOrganizationReferences } from "../services/hrOrganization.js";
 
@@ -37,6 +39,10 @@ function parseDeliveryDate(value?: string | Date) {
 }
 
 export async function epiRoutes(app: FastifyInstance) {
+  app.get("/epi-features", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_VIEW)] }, async () => ({
+    biometricSignatureEnabled: epiFeatures.biometricSignatureEnabled
+  }));
+
   app.get("/epis", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_VIEW)] }, async (request) => {
     const query = z
       .object({
@@ -239,6 +245,10 @@ export async function epiRoutes(app: FastifyInstance) {
       })
       .parse(request.body);
     const scope = await resolveHrDataScope(request);
+
+    if (body.confirmationMethod === ConfirmationMethod.BIOMETRIA && !epiFeatures.biometricSignatureEnabled) {
+      return reply.code(503).send(biometricSignatureDisabledResponse);
+    }
 
     if (body.confirmationMethod === ConfirmationMethod.BIOMETRIA && !body.confirmationBiometricId) {
       return reply

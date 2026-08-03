@@ -3,6 +3,7 @@ import { BiometricProvider, BiometricStatus, HrPermission } from "@prisma/client
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { requireAnyHrPermission, requireHrPermission, resolveHrDataScope } from "../services/hrAccess.js";
+import { requireBiometricSignatureEnabled } from "../services/epiFeatureGuards.js";
 
 export async function biometricRoutes(app: FastifyInstance) {
   app.get("/biometric/templates", { preHandler: [app.authenticate, requireAnyHrPermission(HrPermission.EPI_MANAGE, HrPermission.EMPLOYEE_MANAGE)] }, async (request) => {
@@ -92,7 +93,7 @@ export async function biometricRoutes(app: FastifyInstance) {
     return reply.code(201).send({ message: "Biometria cadastrada com sucesso", biometric });
   });
 
-  app.post("/biometric/identify", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_MANAGE)] }, async (request, reply) => {
+  app.post("/biometric/identify", { preHandler: [app.authenticate, requireHrPermission(HrPermission.EPI_MANAGE), requireBiometricSignatureEnabled] }, async (request, reply) => {
     const body = z
       .object({
         biometricExternalId: z.string().optional(),
