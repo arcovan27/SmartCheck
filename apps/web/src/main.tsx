@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
-import "./styles.css";
+import "./styles.css?v=20260818-login-design";
 
 const queryClient = new QueryClient();
 
