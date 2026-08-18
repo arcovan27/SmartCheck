@@ -51,7 +51,7 @@ export function LoginPage() {
 
   return (
     <main className="min-h-[100dvh] overflow-x-hidden bg-[#f4f7fb] lg:grid lg:grid-cols-[1.08fr_0.92fr]">
-      <section className="relative isolate overflow-hidden bg-[#071b38] px-5 py-6 text-white sm:px-10 sm:py-9 lg:flex lg:min-h-[100dvh] lg:flex-col lg:justify-between lg:px-[clamp(3rem,5vw,6.5rem)] lg:py-12">
+      <section className="relative isolate overflow-hidden bg-[#071b38] px-5 py-6 text-white sm:px-10 sm:py-9 lg:flex lg:min-h-[100dvh] lg:flex-col lg:justify-between lg:px-[clamp(3rem,5vw,6.5rem)] lg:py-8">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 opacity-80">
           <div className="absolute -left-24 -top-28 h-80 w-80 rounded-full border border-white/10" />
           <div className="absolute -left-10 -top-12 h-56 w-56 rounded-full border border-[#60a5fa]/20" />
@@ -92,14 +92,14 @@ export function LoginPage() {
         </div>
       </section>
 
-      <section className="flex min-h-[calc(100dvh-7.4rem)] flex-col items-center justify-center px-4 py-7 sm:min-h-0 sm:px-8 sm:py-10 lg:min-h-[100dvh] lg:px-[clamp(2.5rem,5vw,6rem)]">
+      <section className="flex min-h-[calc(100dvh-7.4rem)] flex-col items-center justify-center px-4 py-7 sm:min-h-0 sm:px-8 sm:py-10 lg:min-h-[100dvh] lg:px-[clamp(2.5rem,5vw,6rem)] lg:py-4">
         <div className="w-full max-w-[31rem]">
-          <div className="mb-5 flex justify-center sm:mb-7">
-            <img className="h-auto w-[min(15rem,72vw)] object-contain sm:w-64" src="/arcovan-logo.png" alt="Arcovan Soluções de Concreto" />
+          <div className="mb-5 flex justify-center sm:mb-7 lg:mb-3">
+            <img className="h-auto w-[min(15rem,72vw)] object-contain sm:w-64 lg:w-48" src="/arcovan-logo.png" alt="Arcovan Soluções de Concreto" />
           </div>
 
           <form
-            className="rounded-[1.75rem] border border-slate-200/90 bg-white p-5 shadow-[0_24px_70px_rgba(15,35,64,0.10)] sm:p-8 lg:p-9"
+            className="rounded-[1.75rem] border border-slate-200/90 bg-white p-5 shadow-[0_24px_70px_rgba(15,35,64,0.10)] sm:p-8 lg:p-6"
             onSubmit={onSubmit}
             aria-busy={loading}
           >
@@ -109,7 +109,7 @@ export function LoginPage() {
               <p className="mt-2 text-sm leading-6 text-slate-500">Entre com seus dados corporativos para continuar.</p>
             </div>
 
-            <div className="mt-6 space-y-4">
+            <div className="mt-6 space-y-4 lg:mt-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700" htmlFor="login-email">E-mail corporativo</label>
                 <input
@@ -160,24 +160,24 @@ export function LoginPage() {
             {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert" aria-live="assertive">{error}</p>}
 
             <button
-              className="mt-5 min-h-12 w-full rounded-xl bg-[#0b2a4e] px-4 text-sm font-bold text-white shadow-[0_10px_24px_rgba(11,42,78,0.22)] outline-none transition hover:bg-[#123e68] focus-visible:ring-4 focus-visible:ring-[#316b9d]/30 disabled:cursor-not-allowed disabled:opacity-65 motion-reduce:transition-none"
+              className="mt-5 min-h-12 w-full rounded-xl bg-[#0b2a4e] px-4 text-sm font-bold text-white shadow-[0_10px_24px_rgba(11,42,78,0.22)] outline-none transition hover:bg-[#123e68] focus-visible:ring-4 focus-visible:ring-[#316b9d]/30 disabled:cursor-not-allowed disabled:opacity-65 motion-reduce:transition-none lg:mt-4"
               type="submit"
               disabled={loading}
             >
               {loading ? "Entrando..." : "Entrar no SmartCheck"}
             </button>
 
-            <div className="mt-5 flex items-center justify-center gap-2 text-xs font-semibold text-slate-500">
+            <div className="mt-5 flex items-center justify-center gap-2 text-xs font-semibold text-slate-500 lg:mt-3">
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 text-emerald-600" fill="none"><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" /><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
               <span>Ambiente seguro</span>
             </div>
           </form>
 
-          <aside className="mt-4 rounded-2xl border border-slate-200/80 bg-white/65 px-4 py-3 text-center text-xs leading-5 text-slate-500 sm:mt-5 sm:text-sm">
+          <aside className="mt-4 rounded-2xl border border-slate-200/80 bg-white/65 px-4 py-3 text-center text-xs leading-5 text-slate-500 sm:mt-5 sm:text-sm lg:mt-3">
             Precisa de ajuda para acessar? Procure o administrador do sistema.
           </aside>
 
-          <footer className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[0.68rem] font-medium text-slate-400 sm:justify-between sm:text-xs">
+          <footer className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[0.68rem] font-medium text-slate-400 sm:justify-between sm:text-xs lg:mt-3">
             <span>© 2026 Arcovan</span>
             <span aria-hidden="true" className="sm:hidden">·</span>
             <span>SmartCheck · Gestão Industrial</span>
