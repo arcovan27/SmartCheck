@@ -3,15 +3,15 @@ import clsx from "clsx";
 export type BusinessArea = "overview" | "operation" | "commercial" | "purchases" | "finance" | "inventory" | "maintenance" | "people" | "admin";
 
 const areaIdentity: Record<BusinessArea, { label: string; accent: string; soft: string }> = {
-  overview: { label: "Visão geral", accent: "#38bdf8", soft: "#e0f2fe" },
+  overview: { label: "Gestão Arcovan", accent: "#38bdf8", soft: "#e0f2fe" },
   operation: { label: "Operação Arcovan", accent: "#22d3ee", soft: "#cffafe" },
   commercial: { label: "Comercial Arcovan", accent: "#a78bfa", soft: "#ede9fe" },
   purchases: { label: "Compras e Suprimentos", accent: "#f59e0b", soft: "#fef3c7" },
   finance: { label: "Financeiro", accent: "#10b981", soft: "#d1fae5" },
   inventory: { label: "Estoque e Expedição", accent: "#2dd4bf", soft: "#ccfbf1" },
-  maintenance: { label: "Manutenção e Engenharia", accent: "#fb7185", soft: "#ffe4e6" },
+  maintenance: { label: "Manutenção", accent: "#fb7185", soft: "#ffe4e6" },
   people: { label: "Segurança e Pessoas", accent: "#60a5fa", soft: "#dbeafe" },
-  admin: { label: "Administração e Cadastros", accent: "#94a3b8", soft: "#e2e8f0" }
+  admin: { label: "Administração", accent: "#94a3b8", soft: "#e2e8f0" }
 };
 
 export function BrandLogo({ compact = false, className }: { compact?: boolean; className?: string }) {
