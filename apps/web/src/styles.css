@@ -102,6 +102,23 @@ body {
 .smartcheck-sidebar-scroll {
   scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
   scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.smartcheck-main-scroll {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+@media (max-width: 1023px) {
+  .smartcheck-mobile-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .smartcheck-mobile-safe-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
 }
 
 .smartcheck-skeleton {

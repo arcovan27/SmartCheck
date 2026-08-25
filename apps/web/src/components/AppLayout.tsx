@@ -299,7 +299,7 @@ function itemIsActive(pathname: string, item: NavigationItem) { return item.exac
 function ExecutiveAppLayout() {
   const location = useLocation(); const navigationType = useNavigationType(); const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false); const [compact, setCompact] = useState(() => localStorage.getItem("smartcheck.sidebar.compact") === "true"); const [search, setSearch] = useState("");
-  const contentRef = useRef<HTMLElement>(null); const positions = useRef(new Map<string, number>()); const previousPath = useRef(location.pathname);
+  const contentRef = useRef<HTMLElement>(null); const menuButtonRef = useRef<HTMLButtonElement>(null); const closeButtonRef = useRef<HTMLButtonElement>(null); const positions = useRef(new Map<string, number>()); const previousPath = useRef(location.pathname);
   const isChecklistOnly = Boolean(user?.checklistOnly);
   const companyQuery = useQuery({ queryKey: ["company"], queryFn: () => apiRequest<any>("/company"), enabled: !isChecklistOnly });
   const companyName = companyQuery.data?.tradeName || companyQuery.data?.legalName || "Arcovan";
@@ -311,37 +311,54 @@ function ExecutiveAppLayout() {
 
   useEffect(() => { localStorage.setItem("smartcheck.sidebar.compact", String(compact)); }, [compact]);
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
-  useEffect(() => { document.body.style.overflow = mobileOpen ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [mobileOpen]);
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+    const frame = requestAnimationFrame(() => closeButtonRef.current?.focus({ preventScroll: true }));
+
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      menuButtonRef.current?.focus({ preventScroll: true });
+    };
+  }, [mobileOpen]);
   useEffect(() => {
     const previous = previousPath.current; if (previous !== location.pathname && contentRef.current) positions.current.set(previous, contentRef.current.scrollTop);
     previousPath.current = location.pathname;
     const frame = requestAnimationFrame(() => {
       const target = navigationType === "POP" ? positions.current.get(location.pathname) ?? 0 : 0;
-      contentRef.current?.scrollTo({ top: target, behavior: "auto" }); window.scrollTo({ top: 0, behavior: "auto" });
+      contentRef.current?.scrollTo({ top: target, behavior: "auto" });
       if (navigationType !== "POP") { const title = document.querySelector<HTMLElement>("#app-route-content h1"); if (title) { title.tabIndex = -1; title.focus({ preventScroll: true }); } }
     });
     return () => cancelAnimationFrame(frame);
   }, [location.pathname, navigationType]);
 
   function toggleGroup(key: string) { setOpenGroups((current) => ({ ...current, [key]: !(current[key] ?? true) })); }
-  const sidebar = <aside className={clsx("flex h-full flex-col bg-[#071b38] text-slate-100 shadow-2xl transition-[width] duration-200", compact ? "lg:w-20" : "lg:w-72")} aria-label="Navegação principal">
-    <div className={clsx("relative flex h-20 items-center border-b border-white/10", compact ? "justify-center px-3" : "gap-3 px-5")}><BrandLogo compact={compact} className={compact ? "" : "max-h-12 max-w-[170px] rounded-lg bg-white p-1.5"} />{compact ? null : <div className="min-w-0 pr-9"><p className="text-xs font-extrabold uppercase tracking-[.22em] text-cyan-300">SmartCheck</p><p className="truncate text-xs text-slate-400">{companyName}</p></div>}<button type="button" onClick={() => setMobileOpen(false)} className="absolute right-3 top-4 grid h-11 w-11 place-items-center rounded-xl border border-white/15 text-xl text-slate-200 hover:bg-white/10 lg:hidden" aria-label="Fechar menu">×</button></div>
+  const sidebar = <aside className={clsx("flex h-full min-h-0 flex-col bg-[#071b38] text-slate-100 shadow-2xl transition-[width] duration-200", compact ? "lg:w-20" : "lg:w-72")} aria-label="Navegação principal">
+    <div className={clsx("smartcheck-mobile-safe-top relative flex min-h-20 shrink-0 items-center border-b border-white/10", compact ? "justify-center px-3" : "gap-3 px-5")}><BrandLogo compact={compact} className={compact ? "" : "max-h-12 max-w-[170px] rounded-lg bg-white p-1.5"} />{compact ? null : <div className="min-w-0 pr-9"><p className="text-xs font-extrabold uppercase tracking-[.22em] text-cyan-300">SmartCheck</p><p className="truncate text-xs text-slate-400">{companyName}</p></div>}<button ref={closeButtonRef} type="button" onClick={() => setMobileOpen(false)} className="absolute right-3 top-[max(1rem,env(safe-area-inset-top))] grid h-11 w-11 place-items-center rounded-xl border border-white/15 text-xl text-slate-200 hover:bg-white/10 lg:hidden" aria-label="Fechar menu">×</button></div>
     <div className={clsx("border-b border-white/10", compact ? "p-3" : "p-4")}>
       {compact ? <button type="button" title="Expandir menu" aria-label="Expandir menu" onClick={() => setCompact(false)} className="grid min-h-11 w-full place-items-center rounded-xl border border-white/10 bg-white/5 hover:bg-white/10"><NavGlyph area="overview" /></button> : <div className="relative"><svg className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input value={search} onChange={(event) => setSearch(event.target.value)} className="min-h-10 w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" placeholder="Buscar módulo…" aria-label="Buscar módulos e funcionalidades" /></div>}
     </div>
-    <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 smartcheck-sidebar-scroll"><div className="space-y-2">{groups.map((group) => {
+    <nav className="smartcheck-sidebar-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto px-3 py-4"><div className="space-y-2">{groups.map((group) => {
       const visibleItems = normalizedSearch ? group.items.filter((item) => `${group.title} ${item.label}`.toLocaleLowerCase("pt-BR").includes(normalizedSearch)) : group.items; if (!visibleItems.length) return null; const expanded = normalizedSearch ? true : (openGroups[group.key] ?? true); const groupActive = group === activeGroup;
       return <section key={group.key}><button type="button" onClick={() => compact ? setCompact(false) : toggleGroup(group.key)} className={clsx("flex min-h-11 w-full items-center rounded-xl text-left text-xs font-bold uppercase tracking-[.08em] transition", compact ? "justify-center px-2" : "gap-3 px-3", groupActive ? "bg-white/10 text-white" : "text-slate-400 hover:bg-white/5 hover:text-slate-200")} title={compact ? group.title : undefined} aria-expanded={expanded}><NavGlyph area={group.id} />{compact ? null : <><span className="min-w-0 flex-1 truncate">{group.title}</span><span className={clsx("text-base transition", expanded && "rotate-90")} aria-hidden="true">›</span></>}</button>{!compact && expanded ? <div className="mb-2 ml-4 mt-1 space-y-1 border-l border-white/10 pl-3">{visibleItems.map((item) => { const active = itemIsActive(location.pathname, item); return <Link key={item.to} to={item.to} aria-current={active ? "page" : undefined} className={clsx("flex min-h-10 items-center rounded-lg px-3 text-sm font-semibold transition", active ? "bg-cyan-400 text-[#071b38] shadow-sm" : "text-slate-300 hover:bg-white/10 hover:text-white")}><span className="truncate">{item.label}</span></Link>; })}</div> : null}</section>;
     })}</div></nav>
-    <div className="border-t border-white/10 p-3"><div className={clsx("mb-2 rounded-xl bg-white/5", compact ? "p-2 text-center" : "p-3")} title={compact ? user?.employee?.name ?? user?.email : undefined}>{compact ? <span className="text-xs font-black">{(user?.employee?.name ?? user?.email ?? "U").slice(0, 2).toUpperCase()}</span> : <><p className="truncate text-sm font-bold">{user?.employee?.name ?? user?.email}</p><p className="truncate text-xs text-slate-400">{user ? roleLabels[user.role] : ""}</p></>}</div><div className={clsx("flex gap-2", compact && "flex-col")}><button type="button" onClick={() => setCompact((value) => !value)} className="hidden min-h-10 flex-1 rounded-xl border border-white/10 text-xs font-bold text-slate-300 hover:bg-white/10 lg:block">{compact ? "›" : "Recolher"}</button><button type="button" onClick={logout} className="min-h-10 flex-1 rounded-xl border border-white/10 text-xs font-bold text-slate-300 hover:bg-white/10">{compact ? "Sair" : "Encerrar"}</button></div></div>
+    <div className="smartcheck-mobile-safe-bottom shrink-0 border-t border-white/10 p-3"><div className={clsx("mb-2 rounded-xl bg-white/5", compact ? "p-2 text-center" : "p-3")} title={compact ? user?.employee?.name ?? user?.email : undefined}>{compact ? <span className="text-xs font-black">{(user?.employee?.name ?? user?.email ?? "U").slice(0, 2).toUpperCase()}</span> : <><p className="truncate text-sm font-bold">{user?.employee?.name ?? user?.email}</p><p className="truncate text-xs text-slate-400">{user ? roleLabels[user.role] : ""}</p></>}</div><div className={clsx("flex gap-2", compact && "flex-col")}><button type="button" onClick={() => setCompact((value) => !value)} className="hidden min-h-10 flex-1 rounded-xl border border-white/10 text-xs font-bold text-slate-300 hover:bg-white/10 lg:block">{compact ? "›" : "Recolher"}</button><button type="button" onClick={logout} className="min-h-10 flex-1 rounded-xl border border-white/10 text-xs font-bold text-slate-300 hover:bg-white/10">{compact ? "Sair" : "Encerrar"}</button></div></div>
   </aside>;
 
-  return <div className="h-screen overflow-hidden bg-[#f4f7fb] text-slate-900 lg:flex">
+  return <div className="flex h-screen h-[100dvh] min-h-0 overflow-hidden bg-[#f4f7fb] text-slate-900">
     <div className="hidden shrink-0 lg:block">{sidebar}</div>
-    {mobileOpen ? <div className="fixed inset-0 z-50 lg:hidden"><button className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" aria-label="Fechar menu clicando fora" onClick={() => setMobileOpen(false)} /><div className="relative h-full w-[min(88vw,320px)]">{sidebar}</div></div> : null}
-    <div className="flex min-w-0 flex-1 flex-col">
-      <header className="z-30 flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 shadow-sm backdrop-blur md:px-6"><button type="button" onClick={() => setMobileOpen(true)} className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 text-[#0b2341] lg:hidden" aria-label="Abrir menu"><span className="text-2xl">☰</span></button><div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-xs font-semibold text-slate-500"><AreaIdentity area={activeGroup?.id ?? "overview"} /><span aria-hidden="true">/</span><span className="truncate">{activeItem?.label ?? "SmartCheck"}</span></div><p className="truncate text-sm font-extrabold text-[#0b2341] md:text-base">{companyName}</p></div><div className="hidden text-right sm:block"><p className="max-w-52 truncate text-sm font-bold">{user?.employee?.name ?? user?.email}</p><p className="text-xs text-slate-500">{user ? roleLabels[user.role] : ""}</p></div></header>
-      <main ref={contentRef} id="main-content-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-smooth p-4 md:p-6 lg:p-8"><div id="app-route-content" className="mx-auto max-w-[1600px]"><Outlet /></div></main>
+    {mobileOpen ? <div id="executive-mobile-navigation" className="fixed inset-0 z-50 h-screen h-[100dvh] min-h-0 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu de navegação"><button className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" aria-label="Fechar menu clicando fora" onClick={() => setMobileOpen(false)} /><div className="relative h-full min-h-0 w-[min(88vw,320px)]">{sidebar}</div></div> : null}
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+      <header className="z-30 flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 shadow-sm backdrop-blur md:px-6"><button ref={menuButtonRef} type="button" onClick={() => setMobileOpen(true)} className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 text-[#0b2341] lg:hidden" aria-label="Abrir menu" aria-expanded={mobileOpen} aria-controls="executive-mobile-navigation"><span className="text-2xl">☰</span></button><div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-xs font-semibold text-slate-500"><AreaIdentity area={activeGroup?.id ?? "overview"} /><span aria-hidden="true">/</span><span className="truncate">{activeItem?.label ?? "SmartCheck"}</span></div><p className="truncate text-sm font-extrabold text-[#0b2341] md:text-base">{companyName}</p></div><div className="hidden text-right sm:block"><p className="max-w-52 truncate text-sm font-bold">{user?.employee?.name ?? user?.email}</p><p className="text-xs text-slate-500">{user ? roleLabels[user.role] : ""}</p></div></header>
+      <main ref={contentRef} id="main-content-scroll" className="smartcheck-main-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto scroll-smooth p-4 md:p-6 lg:p-8"><div id="app-route-content" className="mx-auto max-w-[1600px]"><Outlet /></div></main>
     </div>
   </div>;
 }
