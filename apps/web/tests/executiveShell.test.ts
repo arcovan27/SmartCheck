@@ -35,6 +35,7 @@ test("navegação reposiciona o container real e preserva retorno POP", () => {
   assert.doesNotMatch(layout, /window\.scrollTo/);
   assert.match(layout, /navigationType === "POP"/);
   assert.match(layout, /positions\.current\.get\(location\.pathname\)/);
+  assert.match(layout, /onScroll=\{\(event\) => positions\.current\.set\(location\.pathname, event\.currentTarget\.scrollTop\)\}/);
   assert.match(layout, /title\.focus\(\{ preventScroll: true \}\)/);
 });
 
