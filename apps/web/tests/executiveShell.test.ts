@@ -79,6 +79,22 @@ test("shell mobile limita a altura dinâmica e mantém o main rolável", () => {
   assert.match(layout, /smartcheck-main-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto/);
 });
 
+test("cabeçalho administrativo exibe somente o logo oficial em todos os modos", () => {
+  const sidebarStart = layout.indexOf("const sidebar =");
+  const sidebarHeader = layout.slice(sidebarStart, layout.indexOf('<div className={clsx("border-b', sidebarStart));
+  const styles = readFileSync("apps/web/src/styles.css", "utf8");
+  assert.match(sidebarHeader, /smartcheck-sidebar-header/);
+  assert.match(sidebarHeader, /<BrandLogo compact=\{compact\} \/>/);
+  assert.doesNotMatch(sidebarHeader, />SmartCheck<|\{companyName\}/);
+  assert.match(identity, /compact && "smartcheck-brand-logo--compact"/);
+  assert.match(identity, /src="\/arcovan-logo\.png"/);
+  assert.match(identity, /alt="Arcovan Soluções de Concreto"/);
+  assert.doesNotMatch(identity, /aria-label="SmartCheck">SC/);
+  assert.match(styles, /\.smartcheck-brand-logo[\s\S]*max-width:\s*210px[\s\S]*height:\s*56px/);
+  assert.match(styles, /\.smartcheck-brand-logo--compact[\s\S]*width:\s*56px[\s\S]*height:\s*44px/);
+  assert.match(styles, /\.smartcheck-brand-image[\s\S]*object-fit:\s*contain/);
+});
+
 test("dashboard executivo usa respostas reais, estados isolados e links existentes", () => {
   assert.match(dashboard, /dashboard\/summary/);
   assert.match(dashboard, /data\.modules\?\.purchases/);

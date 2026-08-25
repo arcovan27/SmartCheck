@@ -15,8 +15,9 @@ const areaIdentity: Record<BusinessArea, { label: string; accent: string; soft: 
 };
 
 export function BrandLogo({ compact = false, className }: { compact?: boolean; className?: string }) {
-  if (compact) return <span className={clsx("grid h-10 w-10 place-items-center rounded-xl bg-white text-xs font-black tracking-tight text-[#0b2341] shadow-sm", className)} aria-label="SmartCheck">SC</span>;
-  return <img src="/arcovan-logo.png" alt="Arcovan Soluções de Concreto" className={clsx("h-auto w-full object-contain", className)} />;
+  return <span className={clsx("smartcheck-brand-logo", compact && "smartcheck-brand-logo--compact", className)}>
+    <img src="/arcovan-logo.png" alt="Arcovan Soluções de Concreto" className="smartcheck-brand-image" />
+  </span>;
 }
 
 export function AreaIdentity({ area, compact = false }: { area: BusinessArea; compact?: boolean }) {
