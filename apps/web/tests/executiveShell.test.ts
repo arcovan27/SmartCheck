@@ -18,17 +18,30 @@ test("menu executivo continua filtrado pelas permissões reais", () => {
   assert.doesNotMatch(layout, /title: "Ficha de entrega"|title: "Movimentações de EPI"/);
 });
 
-test("drawer mobile bloqueia scroll e fecha após mudança de rota", () => {
-  assert.match(layout, /document\.body\.style\.overflow = mobileOpen \? "hidden" : ""/);
+test("drawer mobile preserva o body, suporta gesto vertical e fecha com segurança", () => {
+  assert.match(layout, /const previousOverflow = document\.body\.style\.overflow/);
+  assert.match(layout, /document\.body\.style\.overflow = previousOverflow/);
+  assert.match(layout, /event\.key === "Escape"/);
   assert.match(layout, /setMobileOpen\(false\)/);
   assert.match(layout, /aria-label="Fechar menu"/);
+  assert.match(layout, /aria-expanded=\{mobileOpen\}/);
+  assert.match(layout, /h-\[100dvh\]/);
+  assert.match(layout, /smartcheck-sidebar-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto/);
+  assert.match(layout, /role="dialog" aria-modal="true"/);
 });
 
 test("navegação reposiciona o container real e preserva retorno POP", () => {
   assert.match(layout, /contentRef\.current\?\.scrollTo/);
+  assert.doesNotMatch(layout, /window\.scrollTo/);
   assert.match(layout, /navigationType === "POP"/);
   assert.match(layout, /positions\.current\.get\(location\.pathname\)/);
   assert.match(layout, /title\.focus\(\{ preventScroll: true \}\)/);
+});
+
+test("shell mobile limita a altura dinâmica e mantém o main rolável", () => {
+  assert.match(layout, /flex h-screen h-\[100dvh\] min-h-0 overflow-hidden/);
+  assert.match(layout, /flex h-full min-h-0 min-w-0 flex-1 flex-col/);
+  assert.match(layout, /smartcheck-main-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto/);
 });
 
 test("dashboard executivo usa respostas reais, estados isolados e links existentes", () => {
