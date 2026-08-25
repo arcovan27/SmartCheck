@@ -14,16 +14,25 @@ test("menu possui um unico item Orçamentos e rota protegida direta", () => {
   assert.match(app, /permission="QUOTE_VIEW"/);
 });
 
-test("pagina oferece indicadores, filtros, paginacao e fluxo completo", () => {
-  for (const label of ["Total no período", "Em aberto", "Aprovados", "Rejeitados", "Vencidos", "Valor orçado", "Valor aprovado"]) assert.match(page, new RegExp(label));
-  for (const action of ["Novo orçamento", "Visualizar", "Editar", "Duplicar", "Emitir", "Aprovar", "Rejeitar", "Cancelar", "Espelho", "PDF", "Imprimir"]) assert.match(page, new RegExp(action));
-  for (const filter of ["number", "from", "to", "customerId", "responsibleId", "companyId", "unitId", "status"]) assert.match(page, new RegExp(filter));
+test("pagina oferece indicadores e fluxo integrado", () => {
+  for (const label of ["Orçamentos", "Em aberto", "Aprovados", "Expirados", "Valor orçado"]) assert.match(page, new RegExp(label));
+  for (const action of ["Novo orçamento", "Editar", "Emitir", "Marcar enviado", "Aprovar", "Gerar pedido", "Imprimir/PDF"]) assert.match(page, new RegExp(action));
+  for (const filter of ["number", "status"]) assert.match(page, new RegExp(filter));
 });
 
-test("frontend bloqueia duplo envio e baixa PDF autenticado sem URL externa", () => {
+test("formulario e simplificado, sem selecao de empresa ou unidade", () => {
+  for (const label of ["Nome", "Telefone", "Local de entrega", "Condição de pagamento", "Responsável comercial", "Este pedido possui comissão", "SHVENDAS", "WEBMAIS"]) assert.match(page, new RegExp(label));
+  assert.doesNotMatch(page, /form\.companyId/);
+  assert.doesNotMatch(page, /form\.unitId/);
+  assert.match(page, /quote-customers\/search/);
+  assert.match(page, /Catálogo de produtos/);
+  assert.doesNotMatch(page, /Desconto/);
+});
+
+test("frontend bloqueia duplo envio e baixa PDF autenticado", () => {
   assert.match(page, /disabled=\{saveMutation\.isPending\}/);
   assert.match(page, /crypto\.randomUUID\(\)/);
   assert.match(page, /Authorization: `Bearer \$\{token\}`/);
   assert.match(page, /URL\.createObjectURL/);
-  assert.match(page, /contentWindow\?\.print\(\)/);
+  assert.match(page, /window\.open/);
 });

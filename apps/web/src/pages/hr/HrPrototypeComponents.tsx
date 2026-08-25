@@ -70,7 +70,7 @@ export function HrSectionTabs() {
   return (
     <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Seções de Recursos Humanos">
       {tabs.map((tab) => {
-        const active = location.pathname === tab.to;
+        const active = location.pathname === tab.to || (tab.to === "/recursos-humanos/cadastros" && location.pathname.startsWith("/recursos-humanos/cadastros/"));
         return (
           <Link key={tab.to} to={tab.to} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition ${active ? "bg-brand-700 text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-800"}`}>
             {tab.label}

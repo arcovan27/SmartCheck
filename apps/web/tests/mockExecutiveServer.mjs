@@ -1,0 +1,13 @@
+import http from "node:http";
+
+const user = { id: "admin-visual", email: "admin@visual.local", role: "ADMIN", roles: ["ADMIN"], isActive: true, permissions: ["*"], employee: { id: "employee-visual", name: "Marina Arcovan" } };
+const payload = {
+  cards: { activeEmployees: 64, totalEpis: 42, lowStockEpis: 3, activeEquipments: 25, openMaintenances: 11, pendingChecklists: 7, employeeOccurrences: 4, ddsExecutions: 18, quotesCreated: 23, salesOrders: 16, deliveries: 14, qualityEntries: 9, inventoryCounts: 2 },
+  modules: { purchases: { pendingRequests: 8, awaitingApproval: 3, awaitingDelivery: 6, receiptDivergences: 1, fiscalPending: 2 }, finance: { dueToday: "18420.55", dueNextDays: "42310.80", overdue: "2750.00", awaitingApproval: 5, paidInPeriod: "96520.30" } }, sectionErrors: [],
+  hrNotices: [{ id: "notice-1", title: "Integração operacional", message: "Reunião de alinhamento às 14h na sala de produção.", priority: "IMPORTANTE", startsAt: new Date().toISOString(), endsAt: new Date().toISOString(), author: { email: "rh@visual.local", employee: { name: "Equipe de RH" } } }],
+  recentMaintenances: [{ id: "maintenance-1", number: 267, description: "Inspeção preventiva da ponte rolante", status: "EM_ANDAMENTO", priority: "ALTA", equipment: { name: "Ponte Rolante 01" } }, { id: "maintenance-2", number: 266, description: "Ajuste de proteção da prensa", status: "ABERTA", priority: "CRITICA", equipment: { name: "Prensa 02" } }],
+  recentChecklistProblems: [{ id: "problem-1", executedAt: new Date().toISOString(), template: { name: "Checklist diário de segurança" }, equipment: { name: "Empilhadeira 03" } }], recentEpiDeliveries: []
+};
+
+function send(response, value, status = 200) { response.writeHead(status, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization,Content-Type", "Access-Control-Allow-Methods": "GET,POST,OPTIONS" }); response.end(JSON.stringify(value)); }
+http.createServer((request, response) => { if (request.method === "OPTIONS") return send(response, {}); const url = new URL(request.url, "http://localhost"); if (url.pathname === "/auth/login") return send(response, { token: "visual-token", user }); if (url.pathname === "/auth/me") return send(response, user); if (url.pathname === "/company") return send(response, { legalName: "Arcovan Soluções de Concreto", tradeName: "Arcovan" }); if (url.pathname === "/dashboard/summary") return send(response, payload); return send(response, { message: "Endpoint visual não simulado" }, 404); }).listen(3340, "127.0.0.1", () => console.log("Executive visual mock at http://127.0.0.1:3340"));

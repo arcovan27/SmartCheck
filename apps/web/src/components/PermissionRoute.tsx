@@ -4,6 +4,6 @@ import { useAuth, userHasPermission } from "../lib/auth";
 
 export function PermissionRoute({ permission, children }: { permission: string; children: ReactElement }) {
   const { user } = useAuth();
-  if (!userHasPermission(user, permission)) return <Navigate to="/" replace />;
+  if (!userHasPermission(user, permission)) return <Navigate to="/acesso-negado" replace />;
   return children;
 }

@@ -27,11 +27,17 @@ services:
       PORT: 3333
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/smartcheck
       JWT_SECRET: supersecretkey
-      WEB_ORIGIN: http://192.168.2.100:5175
+      WEB_ORIGIN: https://arcovan.smartnuvem.com.br
       UPLOAD_DIR: uploads
       PRIVATE_UPLOAD_DIR: private-uploads
       RUN_MIGRATIONS_ON_START: "false"
       RUN_SEED_ON_START: "false"
+      PURCHASES_ENABLED: "false"
+      PURCHASE_APPROVALS_ENABLED: "false"
+      GOODS_RECEIPTS_ENABLED: "false"
+      FISCAL_DOCUMENTS_ENABLED: "false"
+      ACCOUNTS_PAYABLE_ENABLED: "false"
+      PAYMENTS_ENABLED: "false"
     volumes:
       - ./apps/api/uploads:/app/apps/api/uploads
       - ./apps/api/private-uploads:/app/apps/api/private-uploads
@@ -51,7 +57,14 @@ services:
     container_name: smartcheck-web
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://192.168.2.100:3334
+      VITE_API_URL: https://api.arcovan.smartnuvem.com.br
+      VITE_PURCHASES_ENABLED: "false"
+      VITE_PURCHASE_APPROVALS_ENABLED: "false"
+      VITE_GOODS_RECEIPTS_ENABLED: "false"
+      VITE_FISCAL_DOCUMENTS_ENABLED: "false"
+      VITE_ACCOUNTS_PAYABLE_ENABLED: "false"
+      VITE_PAYMENTS_ENABLED: "false"
+      VITE_ADMIN_SHELL_V2_ENABLED: "false"
     volumes:
       - ./apps/web:/app/apps/web
       - ./package.json:/app/package.json

@@ -1,36 +1,41 @@
-import { API_URL } from "../lib/api";
-
-function buildDownloadUrl(path: string) {
-  return `${API_URL}/downloads/${path}`;
-}
+import { useState } from "react";
+import { downloadProtectedFile } from "../lib/api";
 
 const driverItems = [
   {
     label: "Driver U.are.U x64 (.msi)",
-    href: buildDownloadUrl("drivers-sdk/setup-x64.msi")
+    path: "drivers-sdk/setup-x64.msi"
   },
   {
     label: "Driver U.are.U x86 (.msi)",
-    href: buildDownloadUrl("drivers-sdk/setup-x86.msi")
+    path: "drivers-sdk/setup-x86.msi"
   },
   {
     label: "SDK x64 (setup.exe)",
-    href: buildDownloadUrl("drivers-sdk/SDK/x64/setup.exe")
+    path: "drivers-sdk/SDK/x64/setup.exe"
   },
   {
     label: "SDK x86 (setup.exe)",
-    href: buildDownloadUrl("drivers-sdk/SDK/x86/setup.exe")
+    path: "drivers-sdk/SDK/x86/setup.exe"
   }
 ];
 
 const agentItems = [
   {
     label: "Baixar pacote completo do agente (.zip)",
-    href: buildDownloadUrl("agent-biometrico/SmartCheck-Agent-Biometrico.zip")
+    path: "agent-biometrico/SmartCheck-Agent-Biometrico.zip"
   }
 ];
 
-function DownloadList({ title, description, items }: { title: string; description: string; items: { label: string; href: string }[] }) {
+function DownloadList({ title, description, items }: { title: string; description: string; items: { label: string; path: string }[] }) {
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState("");
+  async function download(path: string) {
+    setError(""); setPending(path);
+    try { const parts = path.split("/"); await downloadProtectedFile(path, parts[parts.length - 1] ?? "download"); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Falha ao baixar arquivo"); }
+    finally { setPending(""); }
+  }
   return (
     <section className="card space-y-4">
       <div>
@@ -39,18 +44,18 @@ function DownloadList({ title, description, items }: { title: string; descriptio
       </div>
       <div className="grid gap-2">
         {items.map((item) => (
-          <a
-            key={item.href}
+          <button
+            type="button"
+            key={item.path}
             className="btn-secondary text-center"
-            href={item.href}
-            target="_blank"
-            rel="noreferrer"
-            download
+            disabled={pending === item.path}
+            onClick={() => void download(item.path)}
           >
-            {item.label}
-          </a>
+            {pending === item.path ? "Preparando download..." : item.label}
+          </button>
         ))}
       </div>
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
     </section>
   );
 }

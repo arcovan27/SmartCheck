@@ -8,18 +8,29 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
   const token = localStorage.getItem("smartcheck.token");
   const hasJsonBody = options?.body !== undefined && !(options.body instanceof FormData);
 
-  const response = await fetch(getApiUrl(path), {
-    ...options,
-    headers: {
-      ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options?.headers ?? {})
-    }
-  });
+  let response: Response;
+  try {
+    response = await fetch(getApiUrl(path), {
+      ...options,
+      headers: {
+        ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options?.headers ?? {})
+      }
+    });
+  } catch {
+    throw new Error("Não foi possível conectar ao servidor. Tente novamente.");
+  }
 
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ message: "Erro inesperado" }));
-    throw new Error(data.message ?? "Erro inesperado");
+    const data = await response.json().catch(() => ({ message: undefined }));
+    const fallbackMessage =
+      response.status === 401
+        ? "E-mail ou senha inválidos."
+        : response.status === 403
+          ? "Usuário sem permissão de acesso."
+          : "Não foi possível concluir a operação. Tente novamente.";
+    throw new Error(data.message ?? fallbackMessage);
   }
 
   return response.json();
@@ -61,6 +72,25 @@ export async function downloadProtectedDocument(id: string, filename: string): P
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: "Falha ao baixar documento" }));
     throw new Error(data.message ?? "Falha ao baixar documento");
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadProtectedFile(path: string, filename: string): Promise<void> {
+  const token = localStorage.getItem("smartcheck.token");
+  const response = await fetch(getApiUrl(`/downloads/${path}`), {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ message: "Falha ao baixar arquivo" }));
+    throw new Error(data.message ?? "Falha ao baixar arquivo");
   }
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");

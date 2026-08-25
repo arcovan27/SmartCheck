@@ -6,10 +6,24 @@
 
 :root {
   font-family: "Barlow", "Segoe UI", sans-serif;
+  --smartcheck-navy-950: #071b38;
+  --smartcheck-navy-900: #0b2341;
+  --smartcheck-navy-800: #0b2a4e;
+  --smartcheck-blue-600: #316b9d;
+  --smartcheck-surface: #ffffff;
+  --smartcheck-canvas: #f4f7fb;
+  --smartcheck-border: #dce4ee;
+  --smartcheck-focus: #0ea5e9;
+  --smartcheck-radius-card: 1rem;
+  --smartcheck-radius-control: 0.75rem;
+  --smartcheck-shadow-card: 0 8px 24px rgba(11, 42, 78, 0.08);
+  --smartcheck-shadow-elevated: 0 20px 45px rgba(7, 27, 56, 0.14);
 }
 
 body {
   @apply bg-slate-100 text-slate-900;
+  min-width: 320px;
+  overflow-x: hidden;
   background-image: radial-gradient(circle at top right, rgba(203, 213, 225, 0.45), transparent 36%),
     radial-gradient(circle at bottom left, rgba(148, 163, 184, 0.15), transparent 50%);
 }
@@ -18,8 +32,13 @@ body {
   min-height: 100vh;
 }
 
+:focus-visible {
+  outline: 3px solid var(--smartcheck-focus);
+  outline-offset: 2px;
+}
+
 .btn {
-  @apply rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150;
+  @apply min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150;
 }
 
 .btn-primary {
@@ -35,13 +54,14 @@ body {
 }
 
 .card {
-  @apply rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm;
+  @apply rounded-2xl border border-slate-200/80 bg-white p-4;
+  box-shadow: var(--smartcheck-shadow-card);
 }
 
 .input,
 .select,
 .textarea {
-  @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-brand-300 transition focus:ring-2;
+  @apply min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-brand-300 transition focus:ring-2;
 }
 
 .section-title {
@@ -70,4 +90,90 @@ body {
 
 .badge-neutral {
   @apply badge bg-slate-200 text-slate-700;
+}
+
+.maintenance-kanban {
+  scrollbar-color: var(--smartcheck-blue-600) rgb(226 232 240);
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
+}
+
+.smartcheck-sidebar-scroll {
+  scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
+  scrollbar-width: thin;
+}
+
+.smartcheck-skeleton {
+  background: linear-gradient(90deg, #e9eef5 25%, #f7f9fc 50%, #e9eef5 75%);
+  background-size: 200% 100%;
+  animation: smartcheck-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes smartcheck-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maintenance-kanban {
+    scroll-behavior: auto;
+  }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+.break-inside-avoid {
+  break-inside: avoid;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .maintenance-print-report,
+  .maintenance-print-report * {
+    visibility: visible;
+  }
+
+  .maintenance-report-overlay,
+  .maintenance-print-report {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  .maintenance-print-report .card {
+    box-shadow: none !important;
+  }
+
+  .print-hidden {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .break-before-page {
+    break-before: page;
+  }
 }

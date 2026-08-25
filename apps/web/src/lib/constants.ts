@@ -2,10 +2,17 @@
 
 export const roleLabels: Record<UserRole, string> = {
   ADMIN: "Administrador",
+  ENCARREGADO: "Encarregado",
   MANUTENCAO: "Manutenção",
   OPERADOR: "Operador",
-  SEGURANCA_DO_TRABALHO: "Segurança do Trabalho",
-  ALMOXARIFADO: "Almoxarifado"
+  RECURSOS_HUMANOS: "Recursos Humanos",
+  SEGURANCA_DO_TRABALHO: "Técnico de Segurança do Trabalho",
+  VENDEDOR: "Vendedor",
+  EXPEDICAO: "Expedição",
+  ALMOXARIFADO: "Almoxarifado",
+  COMPRAS: "Compras",
+  FINANCEIRO: "Financeiro",
+  DIRETORIA: "Diretoria"
 };
 
 export const maintenanceStatusLabels: Record<string, string> = {
