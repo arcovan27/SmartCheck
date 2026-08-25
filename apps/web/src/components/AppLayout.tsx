@@ -299,7 +299,7 @@ function itemIsActive(pathname: string, item: NavigationItem) { return item.exac
 function ExecutiveAppLayout() {
   const location = useLocation(); const navigationType = useNavigationType(); const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false); const [compact, setCompact] = useState(() => localStorage.getItem("smartcheck.sidebar.compact") === "true"); const [search, setSearch] = useState("");
-  const contentRef = useRef<HTMLElement>(null); const menuButtonRef = useRef<HTMLButtonElement>(null); const closeButtonRef = useRef<HTMLButtonElement>(null); const positions = useRef(new Map<string, number>()); const previousPath = useRef(location.pathname);
+  const contentRef = useRef<HTMLElement>(null); const menuButtonRef = useRef<HTMLButtonElement>(null); const closeButtonRef = useRef<HTMLButtonElement>(null); const positions = useRef(new Map<string, number>());
   const isChecklistOnly = Boolean(user?.checklistOnly);
   const companyQuery = useQuery({ queryKey: ["company"], queryFn: () => apiRequest<any>("/company"), enabled: !isChecklistOnly });
   const companyName = companyQuery.data?.tradeName || companyQuery.data?.legalName || "Arcovan";
@@ -330,8 +330,6 @@ function ExecutiveAppLayout() {
     };
   }, [mobileOpen]);
   useEffect(() => {
-    const previous = previousPath.current; if (previous !== location.pathname && contentRef.current) positions.current.set(previous, contentRef.current.scrollTop);
-    previousPath.current = location.pathname;
     const frame = requestAnimationFrame(() => {
       const target = navigationType === "POP" ? positions.current.get(location.pathname) ?? 0 : 0;
       contentRef.current?.scrollTo({ top: target, behavior: "auto" });
@@ -358,7 +356,7 @@ function ExecutiveAppLayout() {
     {mobileOpen ? <div id="executive-mobile-navigation" className="fixed inset-0 z-50 h-screen h-[100dvh] min-h-0 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu de navegação"><button className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" aria-label="Fechar menu clicando fora" onClick={() => setMobileOpen(false)} /><div className="relative h-full min-h-0 w-[min(88vw,320px)]">{sidebar}</div></div> : null}
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <header className="z-30 flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 shadow-sm backdrop-blur md:px-6"><button ref={menuButtonRef} type="button" onClick={() => setMobileOpen(true)} className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 text-[#0b2341] lg:hidden" aria-label="Abrir menu" aria-expanded={mobileOpen} aria-controls="executive-mobile-navigation"><span className="text-2xl">☰</span></button><div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-xs font-semibold text-slate-500"><AreaIdentity area={activeGroup?.id ?? "overview"} /><span aria-hidden="true">/</span><span className="truncate">{activeItem?.label ?? "SmartCheck"}</span></div><p className="truncate text-sm font-extrabold text-[#0b2341] md:text-base">{companyName}</p></div><div className="hidden text-right sm:block"><p className="max-w-52 truncate text-sm font-bold">{user?.employee?.name ?? user?.email}</p><p className="text-xs text-slate-500">{user ? roleLabels[user.role] : ""}</p></div></header>
-      <main ref={contentRef} id="main-content-scroll" className="smartcheck-main-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto scroll-smooth p-4 md:p-6 lg:p-8"><div id="app-route-content" className="mx-auto max-w-[1600px]"><Outlet /></div></main>
+      <main ref={contentRef} id="main-content-scroll" onScroll={(event) => positions.current.set(location.pathname, event.currentTarget.scrollTop)} className="smartcheck-main-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto scroll-smooth p-4 md:p-6 lg:p-8"><div id="app-route-content" className="mx-auto max-w-[1600px]"><Outlet /></div></main>
     </div>
   </div>;
 }
