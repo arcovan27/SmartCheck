@@ -54,23 +54,19 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: https://api.arcovan.smartnuvem.com.br
+        VITE_PURCHASES_ENABLED: "true"
+        VITE_PURCHASE_APPROVALS_ENABLED: "true"
+        VITE_GOODS_RECEIPTS_ENABLED: "true"
+        VITE_FISCAL_DOCUMENTS_ENABLED: "true"
+        VITE_ACCOUNTS_PAYABLE_ENABLED: "true"
+        VITE_PAYMENTS_ENABLED: "true"
+        VITE_ADMIN_SHELL_V2_ENABLED: "true"
     container_name: smartcheck-web
     restart: unless-stopped
-    environment:
-      VITE_API_URL: https://api.arcovan.smartnuvem.com.br
-      VITE_PURCHASES_ENABLED: "false"
-      VITE_PURCHASE_APPROVALS_ENABLED: "false"
-      VITE_GOODS_RECEIPTS_ENABLED: "false"
-      VITE_FISCAL_DOCUMENTS_ENABLED: "false"
-      VITE_ACCOUNTS_PAYABLE_ENABLED: "false"
-      VITE_PAYMENTS_ENABLED: "false"
-      VITE_ADMIN_SHELL_V2_ENABLED: "false"
-    volumes:
-      - ./apps/web:/app/apps/web
-      - ./package.json:/app/package.json
-      - /app/node_modules
     ports:
-      - "5175:5173"
+      - "5175:80"
     depends_on:
       - api
 

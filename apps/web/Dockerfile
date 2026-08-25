@@ -1,13 +1,38 @@
-FROM node:22-alpine AS base
+FROM node:22-alpine AS build
 WORKDIR /app
 
 COPY package.json ./
+COPY package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
-RUN npm install
+RUN npm ci
 
-COPY . .
-WORKDIR /app/apps/web
+COPY apps/web ./apps/web
 
-EXPOSE 5173
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+ARG VITE_API_URL
+ARG VITE_PURCHASES_ENABLED=false
+ARG VITE_PURCHASE_APPROVALS_ENABLED=false
+ARG VITE_GOODS_RECEIPTS_ENABLED=false
+ARG VITE_FISCAL_DOCUMENTS_ENABLED=false
+ARG VITE_ACCOUNTS_PAYABLE_ENABLED=false
+ARG VITE_PAYMENTS_ENABLED=false
+ARG VITE_ADMIN_SHELL_V2_ENABLED=false
+
+ENV VITE_API_URL=$VITE_API_URL \
+    VITE_PURCHASES_ENABLED=$VITE_PURCHASES_ENABLED \
+    VITE_PURCHASE_APPROVALS_ENABLED=$VITE_PURCHASE_APPROVALS_ENABLED \
+    VITE_GOODS_RECEIPTS_ENABLED=$VITE_GOODS_RECEIPTS_ENABLED \
+    VITE_FISCAL_DOCUMENTS_ENABLED=$VITE_FISCAL_DOCUMENTS_ENABLED \
+    VITE_ACCOUNTS_PAYABLE_ENABLED=$VITE_ACCOUNTS_PAYABLE_ENABLED \
+    VITE_PAYMENTS_ENABLED=$VITE_PAYMENTS_ENABLED \
+    VITE_ADMIN_SHELL_V2_ENABLED=$VITE_ADMIN_SHELL_V2_ENABLED
+
+RUN npm run build --workspace @smartcheck/web
+
+FROM nginx:1.27-alpine
+
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+
+EXPOSE 80
+HEALTHCHECK --interval=15s --timeout=3s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1
