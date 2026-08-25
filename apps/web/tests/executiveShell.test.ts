@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const layout = readFileSync("apps/web/src/components/AppLayout.tsx", "utf8");
+const identity = readFileSync("apps/web/src/components/BrandIdentity.tsx", "utf8");
+const executiveNavigation = layout.slice(layout.indexOf("function executiveNavigation"), layout.indexOf("function NavGlyph"));
 const dashboard = readFileSync("apps/web/src/pages/DashboardPage.tsx", "utf8");
 const features = readFileSync("apps/web/src/config/visualFeatures.ts", "utf8");
 
@@ -16,6 +18,38 @@ test("menu executivo continua filtrado pelas permissões reais", () => {
   assert.match(layout, /Recursos Humanos/);
   for (const item of ["Pulso do RH", "EPI", "Funcionários", "Ocorrências", "Cadastro"]) assert.match(layout, new RegExp(item));
   assert.doesNotMatch(layout, /title: "Ficha de entrega"|title: "Movimentações de EPI"/);
+});
+
+test("grupos iniciam recolhidos e funcionam como acordeão acessível", () => {
+  assert.match(layout, /useState<Record<string, boolean>>\(\{\}\)/);
+  assert.match(layout, /current\[key\] \? \{\} : \{ \[key\]: true \}/);
+  assert.match(layout, /openGroups\[group\.key\] \?\? false/);
+  assert.match(layout, /aria-expanded=\{expanded\}/);
+  assert.match(layout, /setCompact\(false\);\s*setOpenGroups\(\{ \[key\]: true \}\)/);
+  assert.doesNotMatch(layout, /openGroups\[group\.key\] \?\? true/);
+});
+
+test("busca expande apenas resultados e volta ao estado recolhido ao limpar", () => {
+  assert.match(layout, /const expanded = normalizedSearch \? true :/);
+  assert.match(layout, /if \(!visibleItems\.length\) return null/);
+  assert.match(layout, /if \(!value\.trim\(\)\) setOpenGroups\(\{\}\)/);
+  assert.match(layout, /onChange=\{\(event\) => handleSearchChange\(event\.target\.value\)\}/);
+});
+
+test("hierarquia executiva mantém ordem e rótulos aprovados", () => {
+  const titles = ["Gestão Arcovan", "Operação Arcovan", "Comercial", "Compras e Suprimentos", "Financeiro", "Estoque e Expedição", "Manutenção", "Segurança e Pessoas", "Recursos Humanos", "Administração"];
+  let previous = -1;
+  for (const title of titles) {
+    const position = executiveNavigation.indexOf(`title: "${title}"`);
+    assert.ok(position > previous, `${title} deve permanecer na ordem aprovada`);
+    previous = position;
+  }
+  assert.match(executiveNavigation, /title: "Gestão Arcovan", items: \[\{ to: "\/gestao-arcovan", label: "Dashboard executivo"/);
+  assert.doesNotMatch(executiveNavigation, /title: "Visão Geral"/);
+  assert.doesNotMatch(executiveNavigation, /title: "Manutenção e Engenharia"|title: "Administração e Cadastros"/);
+  assert.match(identity, /overview: \{ label: "Gestão Arcovan"/);
+  assert.match(identity, /maintenance: \{ label: "Manutenção"/);
+  assert.match(identity, /admin: \{ label: "Administração"/);
 });
 
 test("drawer mobile preserva o body, suporta gesto vertical e fecha com segurança", () => {
